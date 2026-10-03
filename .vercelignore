@@ -3,3 +3,6 @@ artifacts/
 dist/
 .ruff_cache/
 **/__pycache__/
+.vercel/
+.env*
+!.env.example
