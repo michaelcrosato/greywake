@@ -1,0 +1,7 @@
+{
+  "$schema": "https://biomejs.dev/schemas/2.5.15/schema.json",
+  "formatter": { "enabled": true, "indentStyle": "space", "lineWidth": 110 },
+  "linter": { "enabled": true, "rules": { "recommended": true, "suspicious": { "noAssignInExpressions": "off" }, "style": { "noNonNullAssertion": "off" } } },
+  "javascript": { "formatter": { "quoteStyle": "single" } },
+  "overrides": [{ "includes": ["**/*.css"], "linter": { "rules": { "style": { "noDescendingSpecificity": "off" }, "complexity": { "noImportantStyles": "off" } } } }]
+}

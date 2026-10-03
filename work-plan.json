@@ -1,0 +1,64 @@
+{
+  "objective": "Full orientation and sustained audits/improvements of Greywake while the user is away.",
+  "status": "complete",
+  "cycles": [
+    {
+      "id": "orientation",
+      "priority": 1,
+      "status": "verified",
+      "requirements": [
+        "automatic first-play briefing",
+        "isolated safe practice using actual controls",
+        "helm, diving, resources, contacts, combat, evasion, surfacing, captain skills, boat refits, crew doctrines, chart, acceleration, harbor service",
+        "skip/resume/replay and readable manual",
+        "career preservation and tutorial persistence",
+        "desktop/touch/keyboard verification"
+      ],
+      "progress": "Full desktop sequence, safe career preservation, resume/replay, portrait and landscape bounds, and real touch helm/periscope actions passed in test:orientation. Visible camera and rotation race repaired."
+    },
+    {
+      "id": "clarity",
+      "priority": 2,
+      "status": "verified",
+      "requirements": [
+        "explicit ordered-depth feedback",
+        "visible contextual next actions and objectives",
+        "weapon availability reasons",
+        "target focus and accessible help",
+        "resource warnings and useful recovery"
+      ],
+      "progress": "Depth feedback, Help/manual, actionable intent, visible unavailability reasons, contact focus, paused-fire protection, and resource slowdown alerts passed unit and browser checks; mobile advice layout moved clear of navigation controls."
+    },
+    {
+      "id": "gameplay_physics",
+      "priority": 3,
+      "status": "verified",
+      "requirements": [
+        "combat and escort behavior audit",
+        "world streaming and long travel audit",
+        "save/load and paused-input audit",
+        "diving/buoyancy/collision consistency"
+      ],
+      "findings": [
+        "Pending: saves regenerate encounters and discard in-flight weapons; candidate highest-priority next fix.",
+        "Pending: escorts do not react to a nearby merchant being attacked.",
+        "Pending: deck-gun hits are guaranteed by target ID rather than impact position."
+      ],
+      "progress": "Dedicated gameplay/physics tests and live save/reload/browser checks passed. Full encounter persistence, fair escort memory, distress reaction, merchant evasion, physical gun impact/collision, adaptive travel and seamless world cells are verified."
+    },
+    {
+      "id": "visuals_performance",
+      "priority": 4,
+      "status": "verified",
+      "requirements": [
+        "water/hull/camera/lighting consistency",
+        "bounded resource and shader behavior",
+        "repeatable profile and screenshots",
+        "updated offline standalone build"
+      ],
+      "progress": "Final screenshots inspected after mask, landscape, message and daylight repairs. Periscope extension, underwater camera/fog, service beacon, continuous ripple coordinates and matched solar/environment lighting verified. Steady rendering has zero shader/pipeline/buffer growth."
+    }
+  ],
+  "auditPolicy": "After each cycle, inspect runtime/screenshots, fix the highest-impact remaining issue, and rerun relevant checks. Do not mark the overall goal complete after tutorial alone.",
+  "pending": []
+}

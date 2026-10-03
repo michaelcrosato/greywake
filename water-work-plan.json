@@ -1,0 +1,167 @@
+{
+  "objective": "Upgrade Greywake's ocean, water interactions, vessels and water effects to a premium visual experience.",
+  "status": "complete",
+  "requirements": [
+    {
+      "id": "surface",
+      "description": "Wind-driven spectral waves, detailed nearby geometry, consistent displacement/normals, richer sunlight/reflections/scattering",
+      "status": "implemented and verified"
+    },
+    {
+      "id": "interaction",
+      "description": "Persistent curved wakes, propeller wash, waterline foam, local waves and impacts that survive movement and origin rebasing",
+      "status": "implemented and verified"
+    },
+    {
+      "id": "vessels",
+      "description": "Damped heave/pitch/roll from multiple hull samples, wave-triggered bow spray, wet hull/deck materials",
+      "status": "implemented and verified"
+    },
+    {
+      "id": "impacts",
+      "description": "Actual hit positions, distinct shell/torpedo/depth-charge effects, sinking turbulence and bubbles",
+      "status": "implemented and verified"
+    },
+    {
+      "id": "underwater",
+      "description": "Refraction, underwater surface optics, filtered light, bubbles and smooth surface transitions",
+      "status": "implemented and verified"
+    },
+    {
+      "id": "weather",
+      "description": "Distinct calm/swell/storm states with wind direction, foam and spray responding to the sea",
+      "status": "implemented and verified"
+    },
+    {
+      "id": "delivery",
+      "description": "Quality scaling, both rendering backends, standalone offline build, existing functionality and meaningful tests",
+      "status": "implemented and verified"
+    },
+    {
+      "id": "visual-verification",
+      "description": "Inspect actual rendered calm/rough/turning/dive/impact scenes and repair visual defects",
+      "status": "implemented and verified"
+    }
+  ],
+  "evidence": [
+    {
+      "check": "lint",
+      "result": "passed npm run check"
+    },
+    {
+      "check": "unit-tests",
+      "result": "all eight files passed",
+      "report": "artifacts/water-upgrade/final-unit-tests.log"
+    },
+    {
+      "check": "build",
+      "result": "dist/greywake.html rebuilt, 3.42 MB"
+    },
+    {
+      "check": "shader generation",
+      "result": "ocean/wet-hull, WebGL/WebGPU, with/without shadows passed",
+      "report": "artifacts/water-upgrade/shaders/report.json"
+    },
+    {
+      "check": "GLES driver",
+      "result": "all four GLSL vertex/fragment programs compile and link",
+      "report": "artifacts/water-upgrade/shaders/driver-report.json"
+    },
+    {
+      "check": "native scenes",
+      "result": "eight View.render scenes rendered through GLES; limited preview scope",
+      "report": "artifacts/water-upgrade/native/report.json"
+    },
+    {
+      "check": "impact polish",
+      "result": "Brighter, stretched spray sheets added; 0.4-second native torpedo impact capture inspected. Lint, water tests and standalone build passed."
+    },
+    {
+      "check": "impact rendering refinement",
+      "result": "Spray opacity and sheet stretching improved; environment multiplication disabled for spray, bubbles and foam trails. Lint, water tests, build and GLES shader compile/link passed."
+    },
+    {
+      "check": "water diagnostics",
+      "result": "Rendering diagnostics now include effective spectrum/interaction resolutions, mesh sizes, refraction target size and water particle counts. Build and lint passed."
+    },
+    {
+      "check": "game browser",
+      "result": "22 checks passed; actual WebGPU, WebGL fallback/recovery, mobile and offline build; no console errors",
+      "report": "artifacts/browser-report.json"
+    },
+    {
+      "check": "water browser",
+      "result": "16 scenes passed across WebGPU and WebGL, reflections/refraction enabled; calm/swell/storm, turn, three impacts, dive/surface, presets and saves",
+      "report": "artifacts/water-upgrade/browser/report.json"
+    },
+    {
+      "check": "live quality allocations",
+      "result": "Two complete Mobile/Ultra/Balanced cycles retain equal texture, actual GPU buffer, program and uniform buffer counts on both backends. Texture identities and distant mesh objects now remain stable."
+    },
+    {
+      "check": "browser visual repairs",
+      "result": "Reduced dense storm whitecaps and replaced thin impact streaks with broader, varied spray. Final WebGPU and WebGL captures inspected."
+    },
+    {
+      "check": "orientation browser",
+      "result": "12 checks pass; full practice, exact career restoration, replay/resume and touch input",
+      "report": "artifacts/orientation-audit/verification.json"
+    },
+    {
+      "check": "AI lab browser",
+      "result": "10 checks pass; replay equality, career isolation, touch layout, explicit tuning and two-minute fast-forward within ten seconds",
+      "report": "artifacts/ai-lab/browser-report.json"
+    },
+    {
+      "check": "final artifact",
+      "result": "Identical standalone HTML files; 3,588,616 bytes",
+      "file": "dist/greywake.html",
+      "sha256": "bd563158478b84f7cb13cb6e66dea18a30c1d7b8d07e5b1cdcbb1d841391b505"
+    }
+  ],
+  "limitations": [
+    "Browser adapter is software SwiftShader; physical GPU performance remains a human playtest measurement.",
+    "Native previews use an analytical environment atlas and disable planar reflection/refraction; use the browser captures for final visual review."
+  ],
+  "next": [],
+  "completionAudit": {
+    "surface": {
+      "result": "verified",
+      "proved": "Shared FFT/wave sampling tests, real GLSL/WGSL shaders, driver compile/link, and calm/swell/storm browser captures on both backends with reflections/refraction enabled."
+    },
+    "interaction": {
+      "result": "verified",
+      "proved": "Wake scrolling, decay, volume and save tests; date-line continuity; actual turning captures on WebGPU and WebGL."
+    },
+    "vessels": {
+      "result": "verified",
+      "proved": "Multi-point hull tilt/settling and contact-foam tests; browser hull motion/wetness checks; combat and tutorial regressions pass."
+    },
+    "impacts": {
+      "result": "verified",
+      "proved": "Precise torpedo hit integration, attenuation and saved distant rings; shell, torpedo and depth-charge browser captures on both backends."
+    },
+    "underwater": {
+      "result": "verified",
+      "proved": "Actual scene/depth refraction on both backends; live toggles, dive/surface, periscope/fog and underwater captures pass."
+    },
+    "weather": {
+      "result": "verified",
+      "proved": "Three sea presets apply through actual settings controls and render visibly different waves/foam on both backends. Storm foam was thinned after browser inspection."
+    },
+    "delivery": {
+      "result": "verified",
+      "proved": "51 unit tests, lint/build, 22 gameplay browser checks, 12 orientation checks and 10 AI-lab checks pass. Repeated quality changes keep real GPU buffers, textures, programs and uniform buffers stable. Standalone/offline and touch layouts verified."
+    },
+    "visual-verification": {
+      "result": "verified",
+      "proved": "16 final browser water captures plus gameplay screenshots; inspected calm, swell, storm, turns, impacts and underwater travel; repaired storm foam and impact plume shape."
+    }
+  },
+  "historicalBlockingAudit": {
+    "consecutiveGoalTurns": 3,
+    "latestEvidence": "EPERM confirmed on the resumed turn, after the reopen-choice reply, and on the following automatic continuation.",
+    "requiredChange": "Run the existing browser verifiers in a browser-capable environment with local socket access.",
+    "resolved": "Local sockets and headful Chrome now run; actual WebGPU startup, stable warm rendering and gameplay checks verified."
+  }
+}

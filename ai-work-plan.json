@@ -1,0 +1,119 @@
+{
+  "objective": "Make enemy AI less predictable, smarter and more realistic, with rapid simulation, observation and tuning tools.",
+  "status": "complete",
+  "requirements": [
+    "Seeded individual crews and merchant/escort tactical variation",
+    "Limited, noisy sensor observations, uncertainty and no hidden-position/depth targeting",
+    "Coordinated convoy screening, delayed shared contacts, complementary search/attack roles",
+    "Varied search patterns, committed attack runs, recovery and credible torpedo evasion",
+    "Collision/coast avoidance and return to convoy when appropriate",
+    "Persist RNG, contact and tactical state across saves",
+    "In-game isolated AI lab with scenarios, pause/step/fast-forward/replay and live tuning",
+    "Tactical plots, tracks/uncertainty/sensors/intent/reason telemetry and trace export/import",
+    "Headless seeded scenario runner and comparative batch metrics",
+    "Fairness, reproducibility, variation, coordination, safety and performance regression checks",
+    "Preserve tutorial and existing gameplay; rebuild offline standalone HTML"
+  ],
+  "baseline": [
+    "Identical circular search and fixed-period sinusoidal merchant evasion",
+    "Perfect location and depth inside an instantaneous sensor radius",
+    "No escort role coordination, contact-sharing delay or attack-run geometry",
+    "No dedicated AI observation/replay tooling"
+  ],
+  "completedAt": "2026-10-03T10:53:13.756Z",
+  "verification": {
+    "lint": "npm run check: clean",
+    "unitTests": 41,
+    "gameBrowserChecks": 22,
+    "orientationChecks": 12,
+    "orientationLessons": 15,
+    "aiLabBrowserChecks": 10,
+    "consoleErrors": 0,
+    "headlessTrials": 48,
+    "fastForward": {
+      "simulatedSeconds": 119.99999999999575,
+      "wallMs": 137.20000000298023,
+      "frames": 121
+    },
+    "escapeComparison": {
+      "duration": 240,
+      "seeds": 8,
+      "evasive": {
+        "trials": 8,
+        "detectionRate": 1,
+        "meanDetectionSeconds": 14.125,
+        "meanPatterns": 1.25,
+        "meanDamage": 0.9750000000000001,
+        "states": [
+          "screen",
+          "hunt",
+          "investigate",
+          "search",
+          "attack-run",
+          "recover"
+        ],
+        "roles": [
+          "guard",
+          "attacker",
+          "searcher",
+          "assistant"
+        ]
+      },
+      "loud": {
+        "trials": 8,
+        "detectionRate": 1,
+        "meanDetectionSeconds": 156,
+        "meanPatterns": 3,
+        "meanDamage": 30.225,
+        "states": [
+          "screen",
+          "search",
+          "hunt",
+          "attack-run",
+          "recover",
+          "investigate"
+        ],
+        "roles": [
+          "guard",
+          "attacker",
+          "searcher",
+          "assistant"
+        ]
+      }
+    },
+    "blindSearch": {
+      "trials": 8,
+      "detectionRate": 0,
+      "meanDetectionSeconds": 0,
+      "meanPatterns": 0,
+      "meanDamage": 0,
+      "states": [
+        "search",
+        "screen"
+      ],
+      "roles": [
+        "attacker",
+        "assistant",
+        "guard"
+      ]
+    },
+    "standalone": {
+      "bytes": 3557970,
+      "sha256": "c8a211d2623a4eec328c6283f6b55440d83afc47d57c9fd2974aa6b47885535e",
+      "offlineVerified": true
+    },
+    "reports": [
+      "artifacts/browser-report.json",
+      "artifacts/orientation-audit/verification.json",
+      "artifacts/ai-lab/browser-report.json",
+      "artifacts/ai-lab/evasive/batch-report.json",
+      "artifacts/ai-lab/loud/batch-report.json",
+      "artifacts/ai-lab/replayed/verification.json"
+    ]
+  },
+  "limitations": [
+    "Arcade sensor/weapon model informed by 1944 manuals; no exact acoustic or 1942 equipment simulation",
+    "Detection duration and clearance metrics sample at 1 Hz",
+    "Chrome rendering verification uses Linux SwiftShader; native Windows hardware frame time is unverified"
+  ]
+}

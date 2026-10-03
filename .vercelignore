@@ -1,0 +1,5 @@
+node_modules/
+artifacts/
+dist/
+.ruff_cache/
+**/__pycache__/
