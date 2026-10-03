@@ -4,7 +4,9 @@ A free-roaming WWII submarine sandbox. Captain a fictional independent U-boat, i
 
 ## Play
 
-Open **[dist/greywake.html](dist/greywake.html)** in a current Chrome or Edge browser. This file is self-contained: JavaScript, CSS, geometry, textures, audio synthesis, and Rapier WASM are embedded. It requires no network connection or asset server. WebGPU is preferred; WebGL 2 is the fallback. `?renderer=webgl` explicitly selects that fallback.
+**[Play Greywake online](https://greywake-azure.vercel.app)** in a current Chrome or Edge browser.
+
+For offline play, run `npm install` and `npm run build`, then open `dist/greywake.html`. This file is self-contained: JavaScript, CSS, geometry, textures, audio synthesis, and Rapier WASM are embedded. It requires no network connection or asset server. WebGPU is preferred; WebGL 2 is the fallback. `?renderer=webgl` explicitly selects that fallback.
 
 To work on the source:
 
