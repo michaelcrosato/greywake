@@ -7,9 +7,45 @@
     <meta name="description" content="Greywake — a free-roaming WWII submarine captain game. The ocean is yours." />
     <title>GREYWAKE — The ocean is yours</title>
     <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='5' fill='%23101f25'/%3E%3Cpath d='M4 19h24l-4 5H8zM14 12h6v7h-6zM17 7v5' fill='%23dbb67c' stroke='%23dbb67c'/%3E%3C/svg%3E" />
-    <link rel="stylesheet" href="/src/style.css" />
+    <meta name="game-name" content="GREYWAKE" />
+    <meta name="game-version" content="1.0.0" />
+    <meta name="game-build" content="development" />
+    <style id="boot-style">
+      body { margin:0; background:#071015; }
+      #boot-root { position:fixed; inset:0; z-index:2147483000; overflow:auto; box-sizing:border-box; padding:clamp(16px,4vw,40px); background:#071015; color:#d5e4dc; font:14px/1.6 ui-monospace,"Courier New",monospace; }
+      #boot-root[hidden], #game-root[hidden] { display:none!important; }
+      #boot-panel { max-width:760px; margin:auto; }
+      #boot-root h1 { letter-spacing:0; font-weight:normal; font:inherit; font-size:18px; color:#b4d3bc; margin:0 0 20px; }
+      #boot-root p, #boot-root dl { margin:12px 0; }
+      #boot-root dl { display:grid; grid-template-columns:90px minmax(0,1fr); gap:4px 12px; }
+      #boot-root dt { color:#94aaa4; } #boot-root dd { margin:0; overflow-wrap:anywhere; }
+      #boot-progress { width:100%; height:10px; accent-color:#b4d3bc; }
+      #boot-stages { list-style:none; padding:0; white-space:pre-wrap; }
+      #boot-error { border-left:3px solid #f5b194; padding:12px; color:#f5b194; overflow-wrap:anywhere; }
+      #boot-notes { white-space:pre-wrap; color:#a4b9b2; font-size:12px; }
+      #boot-root button { font:inherit; font-size:12px; background:#152830; color:#d5e4dc; border:1px solid #526763; padding:8px 12px; margin:4px 4px 4px 0; cursor:pointer; }
+      #boot-root button:focus-visible { outline:2px solid #f2ce8e; outline-offset:2px; }
+      #boot-report { width:100%; box-sizing:border-box; min-height:180px; background:#0a191f; color:#d5e4dc; font:12px/1.5 monospace; }
+      #boot-root [hidden] { display:none!important; }
+    </style>
+    <template id="game-style"><link rel="stylesheet" href="/src/style.css" /></template>
   </head>
   <body>
+    <section id="boot-root" aria-label="Startup diagnostics"><div id="boot-panel">
+      <h1 id="boot-brand">GREYWAKE / STARTUP</h1>
+      <dl><dt>Version</dt><dd id="boot-version">1.0.0</dd><dt>Build</dt><dd id="boot-build">development</dd><dt>Platform</dt><dd id="boot-platform">Waiting for startup script</dd><dt>Renderer</dt><dd id="boot-renderer">Not selected</dd><dt>Adapter</dt><dd id="boot-adapter">Not available yet</dd></dl>
+      <p id="boot-status" role="status" aria-live="polite">SCRIPT / Waiting / 0%</p>
+      <progress id="boot-progress" max="100" value="0" aria-label="Startup progress"></progress>
+      <p id="boot-error" role="alert" hidden></p><p id="boot-notes"></p>
+      <div id="boot-actions" hidden><button id="boot-retry">Retry startup</button><button id="boot-webgl">Try WebGL 2</button><button id="boot-copy">Copy report</button><button id="boot-download">Download report</button><button id="boot-return" hidden>Return to game</button></div>
+      <p id="boot-feedback" role="status"></p>
+      <ul id="boot-stages" aria-label="Startup stages"></ul>
+      <textarea id="boot-report" aria-label="Startup report" readonly hidden></textarea>
+      <noscript><p>SYS-JS-OFF: JavaScript is disabled. Enable JavaScript to start the game. Version and build above identify this copy.</p></noscript>
+    </div></section>
+    <script src="/src/boot-sentinel.js"></script>
+    <div id="game-root" hidden></div>
+    <template id="game-ui">
     <canvas id="sea" aria-label="Interactive three-dimensional ocean" tabindex="0"></canvas>
     <div id="vignette"></div>
     <main id="launch" class="launch">
@@ -39,6 +75,7 @@
     <section id="guide" class="tutorial-guide" aria-label="Guided captain orientation" hidden><div class="guide-top"><span class="eyebrow">SAFE GUIDED PRACTICE</span><span id="guide-count" class="mono">1 / 15</span></div><h2 id="guide-heading"></h2><div class="guide-body"><p id="guide-copy"></p><p id="guide-report" role="status" aria-live="polite"></p><ul id="guide-tasks"></ul></div><div class="guide-actions"><button id="guide-next" class="primary">Next lesson</button><button id="guide-wait" class="secondary" hidden>Advance maneuver</button></div><div class="guide-bottom"><button id="guide-exit" class="ghost">Pause practice & return to patrol</button><span>Your career is protected</span></div><div class="guide-progress"><span id="guide-progress"></span></div></section>
     <div id="modal" class="modal-backdrop" hidden><section class="modal"><header class="modal-header"><div><p class="eyebrow" id="modal-eyebrow">U-96 / COMMAND</p><h2 id="modal-title">World chart</h2></div><button id="close-modal" class="icon-button" aria-label="Close panel">×</button></header><div id="modal-content"></div></section></div>
     <div id="loss" class="modal-backdrop" hidden><section class="loss-card"><p class="eyebrow">PRESSURE HULL LOST</p><h2>The sea keeps its due.</h2><p>The crew escaped. Salvage restores your boat at the nearest harbor for 25% of your bounty. Your captain, crew ranks, and refits carry on.</p><button id="salvage" class="primary">Recover the boat</button></section></div>
-    <script type="module" src="/src/main.js"></script>
+    </template>
+    <script type="module" src="/src/boot.js"></script>
   </body>
 </html>

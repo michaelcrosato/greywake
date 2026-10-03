@@ -378,6 +378,12 @@ export class UI {
     diagnostics.onclick = () =>
       this.download('greywake-rendering.json', JSON.stringify(this.app.view.diagnostics(), null, 2));
     document.querySelector('#modal-content .file-actions').append(diagnostics);
+    if (window.gameBoot) {
+      const startup = document.createElement('button');
+      startup.textContent = 'Startup diagnostics';
+      startup.onclick = () => window.gameBoot.open();
+      document.querySelector('#modal-content .file-actions').append(startup);
+    }
     const lab = document.createElement('button');
     lab.id = 'open-ai-lab';
     lab.textContent = 'Open enemy AI lab';

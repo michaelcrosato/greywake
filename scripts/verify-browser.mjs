@@ -378,7 +378,7 @@ try {
     heads: greywake.state().heads,
   }));
   await page.reload();
-  await page.waitForFunction(() => greywake.ready, { timeout: 60000 });
+  await page.waitForFunction(() => window.greywake?.ready, null, { timeout: 60000 });
   const preservedEncounter = await page.evaluate(() => ({
     ships: greywake.app.sim.ships.map((s) => ({ id: s.id, hp: s.hp })),
     torpedoes: greywake.app.sim.torpedoes.length,

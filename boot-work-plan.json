@@ -1,0 +1,99 @@
+{
+  "objective": "## Goal\n\nCreate lightweight boot loader. It must run before the main UI or game systems load, similar to a basic computer startup screen. It purpose is to provide key diagnostic trouble shoot information regardless of the platform or enviroment it is being run on.\n\nThe boot loader must:\n\n- Work across all supported platforms, browsers, and devices with minimal dependencies.\n- Initialize critical systems in a clear order, including the rendering backend such as WebGPU, WebGL2, or the best supported fallback.\n- Detect required platform capabilities and report unsupported or failed features.\n- Display simple startup progress with clear stages, percentages, or short status codes.\n- Show useful diagnostic information such as game version, build ID, platform, renderer, graphics adapter when available, and the current startup stage.\n- Use short, memorable startup codes for each stage or failure so players can report problems easily.\n- Keep enough information visible on failure that the player can take a screenshot and submit it with a bug report.\n- Record initialization errors and the stage where each error occurred.\n- Fail gracefully instead of leaving the player on a blank or frozen screen.\n- Avoid loading the full UI, gameplay systems, or other nonessential dependencies until boot checks are complete.\n- Start the main game loop only after all required systems initialize successfully.\n\nKeep the boot loader visually simple, fast, deterministic, and reusable across every game. Individual games can customize its branding or messages, but the underlying startup sequence, diagnostics, error reporting, and status format should remain standardized.",
+  "requirements": [
+    {
+      "requirement": "Work across all supported platforms, browsers, and devices with minimal dependencies.",
+      "status": "verified",
+      "evidence": "Dependency-free kernel and ES5 sentinel; Chromium WebGPU/WebGL, Firefox and WebKit WebGL starts; phone failure screenshots and JavaScript-disabled diagnostic checked."
+    },
+    {
+      "requirement": "Initialize critical systems in a clear order, including the rendering backend such as WebGPU, WebGL2, or the best supported fallback.",
+      "status": "verified",
+      "evidence": "Fixed SYS/WASM/GPU/LOAD/PHY/WORLD/RENDER/SKY/SHDR/FRAME/UI/READY sequence; actual adapter/device checks, runtime renderer initialization, shader and first-frame validation; fallback tested."
+    },
+    {
+      "requirement": "Detect required platform capabilities and report unsupported or failed features.",
+      "status": "verified",
+      "evidence": "Missing Promise, WASM, graphics and HDR cases stop with capability-specific codes; rejected WebGPU falls back to actual WebGL; optional storage/audio recorded."
+    },
+    {
+      "requirement": "Display simple startup progress with clear stages, percentages, or short status codes.",
+      "status": "verified",
+      "evidence": "Boot screen displays working/completed stages and monotonic percentage; successful browser reports reach 100%."
+    },
+    {
+      "requirement": "Show useful diagnostic information such as game version, build ID, platform, renderer, graphics adapter when available, and the current startup stage.",
+      "status": "verified",
+      "evidence": "Version/build/UA/protocol/viewport/renderer/adapter recorded and rendered; deterministic build hash reproduced byte for byte; adapter privacy fallback explicit."
+    },
+    {
+      "requirement": "Use short, memorable startup codes for each stage or failure so players can report problems easily.",
+      "status": "verified",
+      "evidence": "Shared stage codes and specific failure/timeout codes exercised by browser fixtures; standardized game-boot/1 report."
+    },
+    {
+      "requirement": "Keep enough information visible on failure that the player can take a screenshot and submit it with a bug report.",
+      "status": "verified",
+      "evidence": "Phone screenshots prove code, current stage, version, build, platform, adapter and error visible; long summaries bounded, full details downloadable."
+    },
+    {
+      "requirement": "Record initialization errors and the stage where each error occurred.",
+      "status": "verified",
+      "evidence": "Reports include error code, original stage, message and stack; further distinct errors preserve first cause; unit tests prove history and detached snapshots."
+    },
+    {
+      "requirement": "Fail gracefully instead of leaving the player on a blank or frozen screen.",
+      "status": "verified",
+      "evidence": "All negative browser fixtures retain the screen and hide the game; asynchronous stalls time out; late stage completion cannot proceed; no-JS/no-loader sentinel tested."
+    },
+    {
+      "requirement": "Avoid loading the full UI, gameplay systems, or other nonessential dependencies until boot checks are complete.",
+      "status": "verified",
+      "evidence": "Vite request trace proves main/UI/simulation/styles are not fetched before capability checks; standalone payload is inert until checks pass; main UI constructors run last."
+    },
+    {
+      "requirement": "Start the main game loop only after all required systems initialize successfully.",
+      "status": "verified",
+      "evidence": "First frame completes and validates before UI/READY; all failures assert game.ready false; kernel.complete rejects incomplete/out-of-order sequences; normal game regressions pass."
+    }
+  ],
+  "implementation": {
+    "kernel": "src/boot-loader.js",
+    "capabilities": "src/boot-platform.js",
+    "adapter": "src/boot.js",
+    "legacySentinel": "src/boot-sentinel.js",
+    "contract": "docs/boot-loader.md"
+  },
+  "verification": {
+    "unitTests": "artifacts/boot-unit-tests.log",
+    "boot": "artifacts/boot/report.json",
+    "otherBrowsers": "artifacts/boot/other-browsers.json",
+    "development": "artifacts/boot/development.json",
+    "gameplay": "artifacts/browser-report.json",
+    "orientation": "artifacts/orientation-audit/verification.json",
+    "aiLab": "artifacts/ai-lab/browser-report.json"
+  },
+  "delivery": {
+    "targetBranch": "main",
+    "repository": "https://github.com/michaelcrosato/greywake",
+    "publicationRecord": "GitHub pull request and merged commit are authoritative."
+  },
+  "standardization": {
+    "status": "verified",
+    "evidence": "Kernel has no DOM or game imports; fixed codes/progress/schema; platform renderer requirements configurable; HTML branding metadata; generic GameRuntime.startGame interface; reusable contract and limits documented."
+  },
+  "verifiedBuildId": "bcec68106733",
+  "verificationCounts": {
+    "unit": 55,
+    "bootBrowser": 20,
+    "gameplayBrowser": 22,
+    "orientationBrowser": 12,
+    "aiLabBrowser": 10,
+    "additionalBrowsers": [
+      "Firefox",
+      "WebKit"
+    ],
+    "developmentIsolation": "passed",
+    "deterministicBuild": "byte-identical"
+  }
+}

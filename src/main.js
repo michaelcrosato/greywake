@@ -8,19 +8,14 @@ import { UI } from './ui.js';
 import { clamp } from './world.js';
 
 const SAVE_KEY = 'greywake.career.v1';
-const status = document.getElementById('loading-status');
-window.__consoleErrors = [];
-window.addEventListener('error', (e) => window.__consoleErrors.push(e.message));
-window.addEventListener('unhandledrejection', (e) =>
-  window.__consoleErrors.push(String(e.reason?.stack || e.reason)),
-);
+let status;
 
 const app = {
   started: false,
   sim: null,
   view: null,
   ui: null,
-  sound: new Sound(),
+  sound: null,
   saveElapsed: 0,
   recovering: false,
   recoverRenderer() {
@@ -94,27 +89,60 @@ const app = {
   },
 };
 window.greywake = { state: () => app.sim?.state(), config: () => app.sim?.config, app };
-window.addEventListener('greywake:gpu-lost', () => app.recoverRenderer());
+window.addEventListener('greywake:gpu-lost', (event) => {
+  if (window.greywake.ready) app.recoverRenderer();
+  else
+    window.gameBoot?.fail(
+      'RENDER-LOST',
+      new Error(event.detail?.message || 'Graphics device lost during startup.'),
+    );
+});
 
-async function boot() {
+export async function startGame(boot) {
+  status = document.getElementById('loading-status');
   let saved = null;
   try {
     saved = JSON.parse(localStorage.getItem(SAVE_KEY) || 'null');
-  } catch {
-    /* An invalid local save does not prevent launch. */
+  } catch (error) {
+    boot.note('SAVE-UNAVAILABLE', new Error(`Using a fresh career: ${error.message}`));
   }
   const config = saved ? validateConfig(saved.config) : defaults();
   if (!saved && matchMedia('(pointer: coarse)').matches) Object.assign(config.graphics, PRESETS.mobile);
-  await initPhysics();
-  app.sim = new Simulation(config, saved ? restoreCareer(saved.career) : newCareer(), {
-    encounter: saved?.encounter,
+  await boot.stage('PHY', initPhysics);
+  await boot.stage('WORLD', () => {
+    app.sim = new Simulation(config, saved ? restoreCareer(saved.career) : newCareer(), {
+      encounter: saved?.encounter,
+    });
+    app.view = new View(document.getElementById('sea'), app.sim);
   });
-  app.ui = new UI(app);
-  status.textContent = 'Building wave shaders, reflections, and the sky…';
-  app.view = new View(document.getElementById('sea'), app.sim);
-  await app.view.init();
-  app.tutorial = new Orientation(app);
-  app.aiLab = new AILab(app);
+  await app.view.init(boot);
+  await boot.stage('FRAME', async () => {
+    const backend = app.view.renderer.backend;
+    if (backend.device) backend.device.pushErrorScope('validation');
+    let scopeOpen = !!backend.device;
+    try {
+      app.view.render(0.1, true, 0.1);
+      if (backend.device) {
+        await backend.device.queue.onSubmittedWorkDone();
+        scopeOpen = false;
+        const error = await backend.device.popErrorScope();
+        if (error) throw new Error(error.message);
+      } else {
+        backend.gl.finish();
+        const error = backend.gl.getError();
+        if (error) throw new Error(`WebGL first-frame error: 0x${error.toString(16)}`);
+      }
+    } finally {
+      if (scopeOpen) await backend.device.popErrorScope();
+    }
+  });
+  await boot.stage('UI', () => {
+    app.sound = new Sound();
+    app.ui = new UI(app);
+    app.tutorial = new Orientation(app);
+    app.aiLab = new AILab(app);
+    bindInputs();
+  });
   status.textContent = 'Drag to look around · headphones recommended';
   document.getElementById('renderer-badge').textContent =
     `${app.view.backend.toUpperCase()} · THREE.JS r186 · RAPIER 0.19.3`;
@@ -122,13 +150,27 @@ async function boot() {
   begin.textContent = saved ? 'Resume patrol →' : 'Begin patrol →';
   begin.disabled = false;
   document.getElementById('launch-orientation').disabled = false;
-  bindInputs();
+  let diagnosticsPause = null;
+  window.addEventListener('game:boot-visible', (event) => {
+    if (!app.started) return;
+    if (event.detail && diagnosticsPause === null) {
+      diagnosticsPause = app.sim.paused;
+      app.sim.paused = true;
+    } else if (!event.detail && diagnosticsPause !== null) {
+      app.sim.paused = diagnosticsPause;
+      diagnosticsPause = null;
+    }
+  });
   let last = performance.now();
   function frame(now) {
-    if (app.recovering) return;
+    if (app.recovering || boot.report.status === 'failed') return;
     const wallDt = Math.max(0, (now - last) / 1000);
     const dt = Math.min(0.1, wallDt);
     last = now;
+    if (!document.getElementById('boot-root').hidden) {
+      requestAnimationFrame(frame);
+      return;
+    }
     try {
       if (app.started) {
         if (app.aiLab.active) app.aiLab.tick(Math.min(0.1, wallDt));
@@ -147,6 +189,7 @@ async function boot() {
       app.sound.update(app.sim);
     } catch (error) {
       window.__consoleErrors.push(error.stack);
+      boot.fail('RUN-FAIL', error);
       status.textContent = `Renderer error: ${error.message}`;
       app.ui.toast(`Rendering stopped: ${error.message}`);
       console.error(error);
@@ -154,9 +197,11 @@ async function boot() {
     }
     requestAnimationFrame(frame);
   }
-  requestAnimationFrame(frame);
-  window.greywake.ready = true;
-  if (new URLSearchParams(location.search).get('resume') === '1') app.begin();
+  return () => {
+    window.greywake.ready = true;
+    requestAnimationFrame(frame);
+    if (new URLSearchParams(location.search).get('resume') === '1') app.begin();
+  };
 }
 
 function bindInputs() {
@@ -320,11 +365,3 @@ function bindInputs() {
     { passive: false },
   );
 }
-
-boot().catch((error) => {
-  console.error(error);
-  window.__consoleErrors.push(error.stack);
-  status.textContent = `Unable to start: ${error.message}. Try a WebGPU/WebGL2-capable browser.`;
-  status.classList.add('loading-error');
-  document.getElementById('begin').textContent = 'Initialization failed';
-});

@@ -17,7 +17,10 @@
     "test:water-shaders": "node scripts/verify-water-shaders.mjs",
     "test:water-driver": "node scripts/verify-water-shaders.mjs && python3 scripts/verify-water-glsl.py",
     "capture:water-native": "node scripts/capture-water-native.mjs && python3 scripts/render-water-native.py",
-    "test:water-browser": "xvfb-run -a node scripts/verify-water-browser.mjs"
+    "test:water-browser": "xvfb-run -a node scripts/verify-water-browser.mjs",
+    "test:boot": "xvfb-run -a node scripts/verify-boot.mjs",
+    "test:boot:browsers": "xvfb-run -a node scripts/verify-boot-browsers.mjs",
+    "test:boot:dev": "xvfb-run -a node scripts/verify-boot-dev.mjs"
   },
   "dependencies": {
     "@dimforge/rapier3d-compat": "0.19.3",

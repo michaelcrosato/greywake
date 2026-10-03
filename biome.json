@@ -1,7 +1,55 @@
 {
   "$schema": "https://biomejs.dev/schemas/2.5.15/schema.json",
-  "formatter": { "enabled": true, "indentStyle": "space", "lineWidth": 110 },
-  "linter": { "enabled": true, "rules": { "recommended": true, "suspicious": { "noAssignInExpressions": "off" }, "style": { "noNonNullAssertion": "off" } } },
-  "javascript": { "formatter": { "quoteStyle": "single" } },
-  "overrides": [{ "includes": ["**/*.css"], "linter": { "rules": { "style": { "noDescendingSpecificity": "off" }, "complexity": { "noImportantStyles": "off" } } } }]
+  "formatter": {
+    "enabled": true,
+    "indentStyle": "space",
+    "lineWidth": 110
+  },
+  "linter": {
+    "enabled": true,
+    "rules": {
+      "recommended": true,
+      "suspicious": {
+        "noAssignInExpressions": "off"
+      },
+      "style": {
+        "noNonNullAssertion": "off"
+      }
+    }
+  },
+  "javascript": {
+    "formatter": {
+      "quoteStyle": "single"
+    }
+  },
+  "overrides": [
+    {
+      "includes": [
+        "**/*.css"
+      ],
+      "linter": {
+        "rules": {
+          "style": {
+            "noDescendingSpecificity": "off"
+          },
+          "complexity": {
+            "noImportantStyles": "off"
+          }
+        }
+      }
+    },
+    {
+      "includes": [
+        "src/boot-sentinel.js"
+      ],
+      "linter": {
+        "enabled": false
+      },
+      "javascript": {
+        "formatter": {
+          "trailingCommas": "none"
+        }
+      }
+    }
+  ]
 }
