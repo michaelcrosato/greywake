@@ -92,71 +92,101 @@ export class View {
     };
     this.createParticles();
   }
-  async init() {
-    const forceWebGL = new URLSearchParams(location.search).get('renderer') === 'webgl';
-    this.renderer = new THREE.WebGPURenderer({
-      canvas: this.canvas,
-      antialias: true,
-      forceWebGL,
-      powerPreference: 'high-performance',
-    });
-    try {
-      await this.renderer.init();
-    } catch (error) {
-      if (forceWebGL) throw error;
-      this.renderer.dispose();
-      const freshCanvas = this.canvas.cloneNode(false);
-      this.canvas.replaceWith(freshCanvas);
-      this.canvas = freshCanvas;
-      this.renderer = new THREE.WebGPURenderer({ canvas: this.canvas, antialias: true, forceWebGL: true });
-      await this.renderer.init();
-    }
-    this.backend = this.renderer.backend.isWebGPUBackend ? 'WebGPU' : 'WebGL 2';
-    const info = this.renderer.backend.device?.adapterInfo;
-    if (info)
-      this.adapter = {
-        vendor: info.vendor,
-        architecture: info.architecture,
-        description: info.description,
-        software:
-          info.isFallbackAdapter ||
-          /swiftshader|llvmpipe|software/i.test(`${info.architecture} ${info.description}`),
-      };
-    else {
-      const gl = this.renderer.backend.gl,
-        extension = gl?.getExtension('WEBGL_debug_renderer_info');
-      const description = extension ? gl.getParameter(extension.UNMASKED_RENDERER_WEBGL) : 'WebGL adapter';
-      this.adapter = {
-        description,
-        software: /swiftshader|llvmpipe|software|basic render/i.test(description),
-      };
-    }
-    if (this.backend === 'WebGPU')
-      this.renderer.backend.device.lost.then(() => {
-        window.dispatchEvent(new Event('greywake:gpu-lost'));
+  async init(boot) {
+    if (boot) {
+      const previous = THREE.getConsoleFunction();
+      THREE.setConsoleFunction((level, message, ...details) => {
+        if (previous) previous(level, message, ...details);
+        else console[level](message, ...details);
+        if (level !== 'error') return;
+        // Three.js records pipeline failures but can resolve compileAsync anyway.
+        // Keep initialization fallback possible; later shader/draw errors are fatal.
+        if (boot.report.stage === 'RENDER' && boot.report.status === 'starting')
+          boot.note('RENDER-DIAGNOSTIC', new Error(message));
+        else
+          boot.fail(
+            boot.report.status === 'ready' ? 'RUN-GPU' : `${boot.report.stage}-FAIL`,
+            new Error(message),
+          );
       });
-    this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
-    this.renderer.toneMappingExposure = this.config.graphics.exposure;
-    this.updateSun();
-    this.sky.sunPosition.value.copy(this.sun).multiplyScalar(20000);
-    this.sky.cloudCoverage.value = this.config.ocean.cloudCover;
-    this.environmentScene = new THREE.Scene();
-    this.environmentScene.add(this.sky.clone());
-    this.environmentGenerator = new THREE.PMREMGenerator(this.renderer);
-    this.resize();
-    this.applySettings();
-    this.environmentTarget = this.environmentGenerator.fromScene(this.environmentScene, 0.03, 0.1, 40000, {
-      size: 128,
+    }
+    const stage = (code, operation) => (boot ? boot.stage(code, operation) : operation());
+    await stage('RENDER', async () => {
+      const forceWebGL =
+        boot?.report.renderer === 'WebGL 2' ||
+        new URLSearchParams(location.search).get('renderer') === 'webgl';
+      this.renderer = new THREE.WebGPURenderer({
+        canvas: this.canvas,
+        antialias: true,
+        forceWebGL,
+        powerPreference: 'high-performance',
+      });
+      try {
+        await this.renderer.init();
+      } catch (error) {
+        if (forceWebGL) throw error;
+        boot?.note('RENDER-FALLBACK', error);
+        this.renderer.dispose();
+        const freshCanvas = this.canvas.cloneNode(false);
+        this.canvas.replaceWith(freshCanvas);
+        this.canvas = freshCanvas;
+        this.renderer = new THREE.WebGPURenderer({ canvas: this.canvas, antialias: true, forceWebGL: true });
+        await this.renderer.init();
+      }
+      this.backend = this.renderer.backend.isWebGPUBackend ? 'WebGPU' : 'WebGL 2';
+      const info = this.renderer.backend.device?.adapterInfo;
+      if (info)
+        this.adapter = {
+          vendor: info.vendor,
+          architecture: info.architecture,
+          description: info.description,
+          software:
+            info.isFallbackAdapter ||
+            /swiftshader|llvmpipe|software/i.test(`${info.architecture} ${info.description}`),
+        };
+      else {
+        const gl = this.renderer.backend.gl,
+          extension = gl?.getExtension('WEBGL_debug_renderer_info');
+        const description = extension ? gl.getParameter(extension.UNMASKED_RENDERER_WEBGL) : 'WebGL adapter';
+        this.adapter = {
+          description,
+          software: /swiftshader|llvmpipe|software|basic render/i.test(description),
+        };
+      }
+      if (this.backend === 'WebGPU')
+        this.renderer.backend.device.lost.then((info) => {
+          window.dispatchEvent(new CustomEvent('greywake:gpu-lost', { detail: info }));
+        });
+      if (boot && this.backend === 'WebGPU')
+        this.renderer.backend.device.addEventListener('uncapturederror', (event) =>
+          boot.fail('GPU-VALIDATION', event.error),
+        );
+      boot?.update({ renderer: this.backend, adapter: this.adapter });
     });
-    this.scene.environment = this.environmentTarget.texture;
-    this.environmentSun.copy(this.sun);
-    this.lastEnvironmentUpdate = performance.now();
-    this.environmentCloud = this.sky.cloudCoverage.value;
-    this.resize();
-    this.applySettings();
-    this.camera.position.set(-60, 36, 100);
-    this.camera.lookAt(0, 0, -15);
-    await this.renderer.compileAsync(this.scene, this.camera);
+    await stage('SKY', () => {
+      this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
+      this.renderer.toneMappingExposure = this.config.graphics.exposure;
+      this.updateSun();
+      this.sky.sunPosition.value.copy(this.sun).multiplyScalar(20000);
+      this.sky.cloudCoverage.value = this.config.ocean.cloudCover;
+      this.environmentScene = new THREE.Scene();
+      this.environmentScene.add(this.sky.clone());
+      this.environmentGenerator = new THREE.PMREMGenerator(this.renderer);
+      this.resize();
+      this.applySettings();
+      this.environmentTarget = this.environmentGenerator.fromScene(this.environmentScene, 0.03, 0.1, 40000, {
+        size: 128,
+      });
+      this.scene.environment = this.environmentTarget.texture;
+      this.environmentSun.copy(this.sun);
+      this.lastEnvironmentUpdate = performance.now();
+      this.environmentCloud = this.sky.cloudCoverage.value;
+      this.resize();
+      this.applySettings();
+      this.camera.position.set(-60, 36, 100);
+      this.camera.lookAt(0, 0, -15);
+    });
+    await stage('SHDR', () => this.renderer.compileAsync(this.scene, this.camera));
   }
   resize() {
     this.renderer.setPixelRatio(this.config.graphics.pixelRatio);
@@ -676,6 +706,7 @@ export class View {
     return {
       backend: this.backend,
       adapter: this.adapter,
+      startup: window.gameBoot?.snapshot(),
       cameraUnderwater: this.underwater,
       fps: this.fps,
       frameMs: this.frameMs,

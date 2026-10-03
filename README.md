@@ -17,6 +17,16 @@ npm run dev
 
 Vite prints the local URL. Serve over localhost or HTTPS for WebGPU availability. The game is also playable with touch controls in portrait or landscape.
 
+## Startup diagnostics
+
+A small boot screen runs before the game. It reports version, deterministic build ID, platform, renderer/adapter and startup stage. Required checks finish before game code, styles or UI activate. The main loop starts only after physics, the renderer, shader compilation and a validated first frame succeed. WebGPU can fall back to WebGL 2; missing audio or local storage is reported without blocking play.
+
+If startup fails, keep the short error code or download the report for a bug report. The screen remains readable with retry, WebGL fallback and copy/download actions. **Settings → Startup diagnostics** reopens a successful report. The [startup contract](docs/boot-loader.md) documents the reusable dependency-free controller, stage codes, timeouts and packaging.
+
+```sh
+npm run test:boot
+```
+
 ## Learn the boat
 
 Your first patrol opens a paused captain’s briefing. Choose **Start guided practice** for a 15-lesson orientation covering the career goal, helm, periscope dive, essential resources, contact selection and viewing, torpedo salvos, escort evasion, surfacing and the deck gun, captain skills, boat refits, department-head doctrines, chart/autopilot, time compression, harbor service, and the patrol loop.
