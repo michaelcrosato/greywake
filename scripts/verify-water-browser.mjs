@@ -3,10 +3,10 @@ import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { createServer } from 'node:http';
 import { chromium } from 'playwright';
 
-const folder = 'artifacts/water-upgrade/browser';
+const folder = process.env.WATER_CAPTURE_DIR || 'artifacts/water-upgrade/browser';
 const qualityOnly = process.argv.includes('--quality-only');
 await mkdir(folder, { recursive: true });
-const html = await readFile('dist/greywake.html');
+const html = await readFile(process.env.WATER_BUILD || 'dist/greywake.html');
 const server = createServer((_, response) => {
   response.writeHead(200, { 'Content-Type': 'text/html' });
   response.end(html);
@@ -54,6 +54,7 @@ async function draw(page, seconds = 0, rudder = 0) {
         view.ocean.captureRefraction = refraction;
       }
       sim.paused = true;
+      view.renderer._nodes.nodeFrame.update();
       view.render(0.2, false, 0.2);
       const device = view.renderer.backend.device;
       if (device) await device.queue.onSubmittedWorkDone();

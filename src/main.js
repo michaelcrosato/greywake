@@ -5,6 +5,7 @@ import { Orientation } from './guide.js';
 import { View } from './render.js';
 import { initPhysics, newCareer, restoreCareer, Simulation } from './simulation.js';
 import { UI } from './ui.js';
+import { WaterLab } from './water-lab.js';
 import { clamp } from './world.js';
 
 const SAVE_KEY = 'greywake.career.v1';
@@ -25,7 +26,9 @@ const app = {
     this.ui?.toast('Graphics device interrupted. Recovering with WebGL…');
     const url = new URL(location.href);
     url.searchParams.set('renderer', 'webgl');
-    url.searchParams.set('resume', this.started ? '1' : '0');
+    const parked = this.waterLab?.active ? this.waterLab.parked : null;
+    url.searchParams.set('resume', (parked ? parked.started : this.started) ? '1' : '0');
+    url.searchParams.set('paused', (parked ? parked.paused : this.sim.paused) ? '1' : '0');
     setTimeout(() => location.replace(url), 300);
   },
   begin({ guided = true } = {}) {
@@ -51,7 +54,12 @@ const app = {
     }
   },
   careerSnapshot() {
-    return (this.aiLab?.careerSim || this.tutorial?.careerSim || this.sim).snapshot();
+    return (
+      this.waterLab?.careerSim ||
+      this.aiLab?.careerSim ||
+      this.tutorial?.careerSim ||
+      this.sim
+    ).snapshot();
   },
   attachSimulation(sim, { render = true } = {}) {
     this.sim = sim;
@@ -61,7 +69,6 @@ const app = {
     this.view.ocean.config = config;
     this.ui.sim = this.sim;
     if (render) {
-      this.view.trails.clear();
       for (const model of this.view.shipModels.values()) {
         this.view.scene.remove(model);
         for (const material of model.userData.waterMaterials || []) material.dispose();
@@ -72,15 +79,21 @@ const app = {
       this.view.applySettings(true);
     }
     this.ui.pauseBefore = false;
+    this.previewTime = 0;
+    this.view.lastEffectTime = sim.visualTime;
   },
   replace(career, config, encounter) {
+    if (this.waterLab?.active) this.waterLab.stop();
     if (this.aiLab?.active) this.aiLab.stop();
     if (this.tutorial?.active) this.tutorial.stop(false);
     this.sim.dispose();
     this.attachSimulation(new Simulation(config, career, { encounter }));
   },
   reset() {
-    this.replace(newCareer(), this.sim.config);
+    this.replace(
+      newCareer(),
+      (this.waterLab?.careerSim || this.aiLab?.careerSim || this.tutorial?.careerSim || this.sim).config,
+    );
     this.save();
   },
   loadCareer(value) {
@@ -141,6 +154,7 @@ export async function startGame(boot) {
     app.ui = new UI(app);
     app.tutorial = new Orientation(app);
     app.aiLab = new AILab(app);
+    app.waterLab = new WaterLab(app);
     bindInputs();
   });
   status.textContent = 'Drag to look around · headphones recommended';
@@ -173,15 +187,16 @@ export async function startGame(boot) {
     }
     try {
       if (app.started) {
-        if (app.aiLab.active) app.aiLab.tick(Math.min(0.1, wallDt));
-        else app.sim.update(dt);
+        if (app.waterLab.active) app.waterLab.tick(wallDt);
+        else if (app.aiLab.active) app.aiLab.tick(Math.min(0.1, wallDt));
+        else if (!app.tutorial?.advancing) app.sim.update(wallDt);
         app.saveElapsed += dt;
         if (app.saveElapsed > 10) {
           app.save();
           app.saveElapsed = 0;
         }
-      } else app.sim.visualTime += dt;
-      if (!app.aiLab.active) {
+      } else app.previewTime = (app.previewTime || 0) + dt;
+      if (!app.aiLab.active && !app.waterLab.active) {
         app.view.render(dt, !app.started, wallDt);
         app.ui.update(dt);
         app.tutorial.tick(wallDt);
@@ -200,7 +215,9 @@ export async function startGame(boot) {
   return () => {
     window.greywake.ready = true;
     requestAnimationFrame(frame);
-    if (new URLSearchParams(location.search).get('resume') === '1') app.begin();
+    const params = new URLSearchParams(location.search);
+    if (params.get('resume') === '1') app.begin();
+    if (params.get('paused') === '1') app.sim.paused = true;
   };
 }
 
@@ -208,6 +225,12 @@ function bindInputs() {
   const keys = new Set(),
     canvas = document.getElementById('sea');
   let drag = null;
+  app.captureInputs = () => ({ keys: [...keys], rudder: app.sim.rudder });
+  app.restoreInputs = (state) => {
+    keys.clear();
+    for (const key of state?.keys || []) keys.add(key);
+    app.sim.rudder = state?.rudder || 0;
+  };
   app.clearInputs = () => {
     keys.clear();
     app.sim.rudder = 0;
@@ -218,6 +241,11 @@ function bindInputs() {
     if (app.ui.panel === 'chart') app.ui.drawChart();
   });
   window.addEventListener('blur', () => {
+    if (app.waterLab?.active) {
+      app.waterLab.pause();
+      app.save();
+      return;
+    }
     if (app.aiLab?.active) {
       app.aiLab.playing = false;
       document.getElementById('ai-play').textContent = 'Play';
@@ -230,6 +258,11 @@ function bindInputs() {
   });
   document.addEventListener('visibilitychange', () => {
     if (document.hidden) {
+      if (app.waterLab?.active) {
+        app.waterLab.pause();
+        app.save();
+        return;
+      }
       if (app.aiLab?.active) {
         app.aiLab.playing = false;
         document.getElementById('ai-play').textContent = 'Play';
@@ -244,6 +277,16 @@ function bindInputs() {
   });
   window.addEventListener('pagehide', () => app.save());
   document.addEventListener('keydown', (e) => {
+    if (app.waterLab?.active) {
+      if (e.key === 'Escape' || e.key === 'F2') {
+        e.preventDefault();
+        app.waterLab.stop();
+      } else if (e.code === 'Space' && !e.target.closest('input,select,button,summary,a')) {
+        e.preventDefault();
+        document.getElementById('water-play').click();
+      }
+      return;
+    }
     if (app.aiLab?.active) {
       if (e.key === 'Tab') {
         const controls = [
@@ -343,6 +386,10 @@ function bindInputs() {
   });
   canvas.addEventListener('pointerdown', (e) => {
     canvas.focus();
+    if (app.waterLab?.active) {
+      app.view.comparisonCamera = null;
+      if (app.view.labCamera) app.view.labCamera.pose = null;
+    }
     drag = { x: e.clientX, y: e.clientY };
     canvas.setPointerCapture(e.pointerId);
   });
@@ -362,11 +409,16 @@ function bindInputs() {
     'wheel',
     (e) => {
       e.preventDefault();
+      if (app.waterLab?.active) app.view.comparisonCamera = null;
       app.sim.config.graphics.cameraDistance = clamp(
         app.sim.config.graphics.cameraDistance + e.deltaY * 0.1,
         55,
         300,
       );
+      if (app.waterLab?.active) {
+        app.waterLab.recordTuning();
+        app.waterLab.syncRow('graphics.cameraDistance', app.sim.config.graphics.cameraDistance);
+      }
     },
     { passive: false },
   );

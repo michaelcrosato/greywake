@@ -12,6 +12,9 @@ import {
 import { DeveloperPanel } from './developer-panel.js';
 import { manualHTML, welcomeHTML } from './guide.js';
 import { worldClock } from './lighting.js';
+import { settingControl, settingText, settingValue } from './setting-controls.js';
+import { applyWaterLook } from './water-presets.js';
+import { WATER_METADATA } from './water-settings.js';
 import {
   clamp,
   coordinates,
@@ -285,7 +288,7 @@ export class UI {
       const p = this.sim.p;
       content.innerHTML = `<div class="panel-stats"><div class="panel-stat"><small>VESSELS SUNK</small><strong>${p.sunk}</strong></div><div class="panel-stat"><small>TONNAGE</small><strong>${number(p.tonnage)}</strong></div><div class="panel-stat"><small>SAILED</small><strong>${number(p.distance / 1852)} <small>nm</small></strong></div></div><p class="panel-intro">${positionText(p)} · ${regionName(p.x, p.z)}. Career autosaves every ten seconds and when a panel closes.</p>${p.log.map((e) => `<div class="log-entry"><time>DAY ${String(Math.floor(e.time / 86400) + 1).padStart(2, '0')}<br />${new Date(e.time * 1000).toISOString().slice(11, 16)}</time><span>${escapeHtml(e.text)}</span></div>`).join('')}<div class="file-actions"><button id="export-save">Export career</button><button id="import-save">Import career</button><button id="new-career" class="danger-button">Start a new career</button></div><p class="settings-help">Controls</p><div class="help-grid"><span><kbd>W / S</kbd>Engine throttle</span><span><kbd>A / D</kbd>Rudder (cancels autopilot)</span><span><kbd>SPACE</kbd>Launch torpedo at selected contact</span><span><kbd>F / Q</kbd>Deck gun / sonar ping</span><span><kbd>R / V</kbd>Surface / periscope depth</span><span><kbd>X / C</kbd>Deep dive / camera view</span><span><kbd>M / K</kbd>Chart / captain skills</span><span><kbd>T / P</kbd>Time acceleration / pause</span><span><kbd>TAB</kbd>Next nearby contact</span><span><kbd>DRAG</kbd>Orbit camera · wheel to zoom</span></div>`;
       $('export-save').onclick = () =>
-        this.download('greywake-career.json', JSON.stringify(this.app.careerSnapshot(), null, 2));
+        this.download('greywake-career.json', JSON.stringify(this.app.careerSnapshot()));
       $('import-save').onclick = () => this.importFile('career');
       $('new-career').onclick = () => {
         if (confirm('Start a new career? Export your current career first if you want to keep it.')) {
@@ -304,23 +307,15 @@ export class UI {
       `<p class="panel-intro">Every control is live. Settings are saved locally and travel with exported careers. Start with Mobile for S25-class hardware or Balanced for an RTX 3060 Ti, then tune to your device.</p><div class="settings-top"><button data-preset="mobile">Mobile</button><button data-preset="balanced">Balanced</button><button data-preset="ultra">Ultra</button><span class="small-note" id="live-performance">${this.app.view?.backend || 'INITIALIZING'}</span></div><div class="settings-tabs">${Object.keys(
         SETTINGS,
       )
+        .filter((g) => !g.startsWith('water'))
         .map(
           (g) =>
             `<button data-settings-tab="${g}" class="${group === g ? 'active' : ''}">${g[0].toUpperCase() + g.slice(1)}</button>`,
         )
         .join('')}</div><div class="settings-fields">${Object.entries(SETTINGS[group])
         .map(([key, spec]) => {
-          const boolean = typeof spec[1] === 'boolean',
-            value = config[group][key];
-          const control = spec[5]
-            ? `<select data-setting="${group}.${key}">${spec[5]
-                .map(
-                  (option) =>
-                    `<option value="${option}" ${option === value ? 'selected' : ''}>${option}</option>`,
-                )
-                .join('')}</select>`
-            : `<input data-setting="${group}.${key}" type="${boolean ? 'checkbox' : 'range'}" ${boolean ? (value ? 'checked' : '') : `min="${spec[2]}" max="${spec[3]}" step="${spec[4]}" value="${value}"`} />`;
-          return `<label class="setting-row"><span>${spec[0]}</span>${control}<output>${boolean ? (value ? 'ON' : 'OFF') : Number(value).toFixed(spec[4] < 1 ? 2 : 0)}</output></label>`;
+          const value = config[group][key];
+          return `<label class="setting-row"><span>${spec[0]}</span>${settingControl(`${group}.${key}`, spec, value, 'data-setting')}<output>${settingText(value)}</output></label>`;
         })
         .join(
           '',
@@ -333,14 +328,18 @@ export class UI {
     if (group === 'ocean') {
       const states = document.createElement('div');
       states.className = 'settings-top';
-      states.innerHTML = Object.entries(SEA_STATES)
-        .map(([key, state]) => `<button data-sea-state="${key}">${state.name}</button>`)
-        .join('');
+      states.innerHTML =
+        '<button id="open-water-lab">Open Water Lab</button>' +
+        Object.entries(SEA_STATES)
+          .map(([key, state]) => `<button data-sea-state="${key}">${state.name}</button>`)
+          .join('');
       document.querySelector('.settings-fields').before(states);
+      $('open-water-lab').onclick = () => this.app.waterLab.start();
       for (const button of states.querySelectorAll('[data-sea-state]'))
         button.onclick = () => {
-          const { name, ...settings } = SEA_STATES[button.dataset.seaState];
-          Object.assign(config.ocean, settings);
+          applyWaterLook(config, button.dataset.seaState);
+          this.sim.refreshWeather();
+          this.app.view.refreshEnvironment(true);
           this.app.save();
           this.drawSettings();
         };
@@ -352,17 +351,27 @@ export class UI {
         this.app.save();
         this.drawSettings();
       };
-    for (const input of document.querySelectorAll('[data-setting]'))
-      input.oninput = () => {
-        const [g, k] = input.dataset.setting.split('.'),
-          value = input.type === 'checkbox' ? input.checked : Number(input.value);
+    for (const input of document.querySelectorAll('[data-setting]')) {
+      const apply = (event) => {
+        const [g, k] = input.dataset.setting.split('.');
+        const meta = WATER_METADATA[input.dataset.setting];
+        let value;
+        try {
+          value = settingValue(input, SETTINGS[g][k]);
+        } catch {
+          return;
+        }
+        clearTimeout(input.waterCommit);
+        if (meta && ['resource', 'spectrum'].includes(meta.update) && event.type === 'input') {
+          input.nextElementSibling.value = `${settingText(value)} requested`;
+          input.waterCommit = setTimeout(() => {
+            if (this.sim.config === config) apply({ type: 'change' });
+          }, 180);
+          return;
+        }
         config[g][k] = value;
-        input.nextElementSibling.value =
-          typeof value === 'boolean'
-            ? value
-              ? 'ON'
-              : 'OFF'
-            : Number(value).toFixed(SETTINGS[g][k][4] < 1 ? 2 : 0);
+        if (g === 'ocean' && ['weather', 'stormStrength'].includes(k)) this.sim.refreshWeather();
+        input.nextElementSibling.value = settingText(value);
         if (g === 'graphics')
           this.app.view?.applySettings(['oceanSegments', 'interactionResolution'].includes(k));
         if (g === 'world') {
@@ -373,8 +382,12 @@ export class UI {
         }
         if (g === 'navigation' && k === 'travelMultiplier')
           this.sim.acceleration = Math.min(this.sim.acceleration, value);
-        this.app.save();
+        if (meta?.section === 'Lighting' && event.type === 'change') this.app.view.refreshEnvironment(true);
+        clearTimeout(this.settingsSave);
+        this.settingsSave = setTimeout(() => this.app.save(), 250);
       };
+      input.oninput = input.onchange = apply;
+    }
     for (const button of document.querySelectorAll('[data-debug]'))
       button.onclick = () => this.sim.debug(button.dataset.debug);
     $('export-settings').onclick = () =>
@@ -425,11 +438,11 @@ export class UI {
       try {
         const file = input.files?.[0];
         if (!file) return;
-        if (file.size > 2e6) throw new Error('File is too large.');
+        if (file.size > 4e6) throw new Error('File is too large (4 MB maximum).');
         const value = JSON.parse(await file.text());
         if (kind === 'settings') {
           if (!value.graphics || !value.combat) throw new Error('Choose a Greywake settings file.');
-          const valid = validateConfig(value);
+          const valid = validateConfig(value, { strict: true });
           for (const g of Object.keys(valid)) Object.assign(this.sim.config[g], valid[g]);
           this.app.view.applySettings(true);
         } else {

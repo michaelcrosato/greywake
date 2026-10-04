@@ -1,5 +1,10 @@
 import { DEG, deltaX } from './world.js';
 
+export function sunlightTransmission(cloudCover) {
+  const t = Math.max(0, Math.min(1, (cloudCover - 0.15) / 0.75));
+  return 1 - 0.88 * t * t * (3 - 2 * t);
+}
+
 export function worldClock(player, config) {
   const hours =
     config.ocean.sunHour + (config.ocean.dayCycle ? (player.time / (config.ocean.dayMinutes * 60)) * 24 : 0);

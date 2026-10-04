@@ -282,6 +282,8 @@ export class Orientation {
     };
   }
   start(restart = false) {
+    if (this.app.waterLab?.active) this.app.waterLab.stop();
+    if (this.app.aiLab?.active) this.app.aiLab.stop();
     this.app.ui.close();
     if (!this.app.started) this.app.begin({ guided: false });
     if (!this.active) {
@@ -489,8 +491,8 @@ export class Orientation {
     );
     $('sea').focus();
   }
-  advanceManeuver() {
-    if (!this.active || this.sim.paused) return;
+  async advanceManeuver() {
+    if (!this.active || this.sim.paused || this.advancing) return;
     const id = this.lesson.id,
       p = this.sim.p;
     let seconds = 0;
@@ -505,10 +507,27 @@ export class Orientation {
         distance(p, p.destination) / Math.max(2, this.sim.speedLimit() * p.throttle) + 30,
       );
     }
-    const factor = this.sim.acceleration;
-    for (let i = 0; i < Math.ceil((seconds * 30) / factor); i++) this.sim.update(1 / 30);
-    this.tick(1);
+    const sim = this.sim,
+      endTime = sim.p.time + seconds;
+    this.advancing = true;
+    this.cache = null;
+    this.tick(0);
+    try {
+      for (let batch = 0; sim.p.time < endTime - 1e-8; batch++) {
+        if (!this.active || sim !== this.sim || this.lesson.id !== id || sim.paused) break;
+        sim.update(1 / 30);
+        if (batch % 4 === 3) {
+          this.tick(0);
+          await new Promise((resolve) => setTimeout(resolve, 0));
+        }
+      }
+    } finally {
+      this.advancing = false;
+      this.cache = null;
+      this.tick(1);
+    }
   }
+
   tick(dt) {
     if (!this.active) return;
     this.elapsed += dt;
@@ -543,11 +562,12 @@ export class Orientation {
             ? 'Advance short passage'
             : 'Advance ordered maneuver';
       $('guide-wait').disabled =
-        this.lesson.id === 'attack'
+        this.advancing ||
+        (this.lesson.id === 'attack'
           ? this.sim.torpedoes.length === 0
           : this.lesson.id === 'time'
             ? this.sim.acceleration <= 1 || !this.sim.p.auto
-            : this.sim.p.depth === this.sim.p.targetDepth;
+            : this.sim.p.depth === this.sim.p.targetDepth);
       document.body.classList.toggle('tutorial-modal', !!this.app.ui.panel);
       $('guide').classList.toggle('modal-guide', !!this.app.ui.panel);
       this.highlight();

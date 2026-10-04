@@ -18,10 +18,21 @@ export function developerDefaults() {
     ...Object.fromEntries(Object.entries(DEV_SETTINGS).map(([key, spec]) => [key, spec[1]])),
   };
 }
-export function validateDeveloper(raw) {
+export function validateDeveloper(raw, { strict = false } = {}) {
   const result = developerDefaults();
+  if (strict && raw?.enabled !== undefined && typeof raw.enabled !== 'boolean')
+    throw new Error('Invalid developer mode.');
   result.enabled = raw?.enabled === true;
   for (const [key, spec] of Object.entries(DEV_SETTINGS)) {
+    const value = raw?.[key];
+    if (
+      strict &&
+      value !== undefined &&
+      (typeof spec[1] === 'boolean'
+        ? typeof value !== 'boolean'
+        : !Number.isFinite(value) || value < spec[2] || value > spec[3])
+    )
+      throw new Error(`Invalid ${spec[0]}.`);
     if (typeof spec[1] === 'boolean') result[key] = raw?.[key] === true;
     else if (Number.isFinite(raw?.[key])) result[key] = clamp(raw[key], spec[2], spec[3]);
   }

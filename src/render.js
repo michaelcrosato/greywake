@@ -1,8 +1,9 @@
 import { SkyMesh } from 'three/addons/objects/SkyMesh.js';
 import * as THREE from 'three/webgpu';
-import { sunlight, worldClock } from './lighting.js';
+import { sunlight, sunlightTransmission, worldClock } from './lighting.js';
 import { buildModels } from './models.js';
 import { Ocean } from './ocean.js';
+import { immersionEnvelope, LOCAL_FOAM_BLEND_END, LOCAL_FOAM_BLEND_START } from './water-math.js';
 import { hullWaterPose, newWaterMotion } from './water-surface.js';
 import { dropletTexture } from './water-textures.js';
 import { clamp, deltaX, distance as geoDistance, isLand, random } from './world.js';
@@ -50,7 +51,6 @@ export class View {
     this.scene.add(this.portBuoy);
     this.scene.add(this.sub);
     this.shipModels = new Map();
-    this.trails = new Map();
     this.orbit = -0.58;
     this.elevation = 0;
     this.mode = 'chase';
@@ -70,6 +70,16 @@ export class View {
     this.sky.rayleigh.value = 1.2;
     this.sky.cloudScale.value = 0.00012;
     this.sky.cloudDensity.value = 0.65;
+    // SkyMesh multiplies its wall-time node by this scalar. Use the same render
+    // clock in the denominator, so their product is the accepted sea phase.
+    this.sky.cloudSpeed.onRenderUpdate(
+      (frame) =>
+        ((this.freezeLighting
+          ? this.skyFrozenPhase || 0
+          : this.sim.water.phaseAt(this.sim.renderTime ?? this.sim.visualTime)) *
+          0.00004) /
+        Math.max(1e-9, frame.time),
+    );
     this.scene.add(this.sky);
     this.light = new THREE.DirectionalLight(0xffe1b7, 3);
     this.light.castShadow = true;
@@ -88,9 +98,20 @@ export class View {
     this.light.shadow.shadowNode = this.ocean.sunShadow;
     const mirrorUpdate = this.ocean.mirror.reflector.updateBefore.bind(this.ocean.mirror.reflector);
     this.ocean.mirror.reflector.updateBefore = (...args) => {
-      if (this.config.graphics.reflections && !this.underwater) return mirrorUpdate(...args);
+      if (this.config.graphics.reflections && this.config.waterAppearance.planarGain > 0 && !this.underwater)
+        return mirrorUpdate(...args);
     };
     this.createParticles();
+    this.probeUp = new THREE.Color(0x91ecc8);
+    this.probeDown = new THREE.Color(0xffbd75);
+    this.probeOverlay = new THREE.InstancedMesh(
+      new THREE.SphereGeometry(0.7, 6, 4),
+      new THREE.MeshBasicMaterial({ color: 0xffffff, depthTest: false }),
+      12,
+    );
+    this.probeOverlay.visible = false;
+    this.probeOverlay.frustumCulled = false;
+    this.scene.add(this.probeOverlay);
   }
   async init(boot) {
     if (boot) {
@@ -214,7 +235,6 @@ export class View {
     this.ocean.bindSurface(this.sim.water);
   }
   clearWorldVisuals() {
-    this.trails.clear();
     for (const model of this.shipModels.values()) {
       this.scene.remove(model);
       for (const material of model.userData.waterMaterials || []) material.dispose();
@@ -225,6 +245,8 @@ export class View {
     this.tracers.count = this.fireballs.count = 0;
     this.emission = 0;
     this.terrainKey = '';
+    this.lastEffectTime = this.sim.visualTime;
+    this.underwaterBlend = 0;
   }
   updateSun() {
     const clock = worldClock(this.sim.p, this.config),
@@ -232,13 +254,19 @@ export class View {
     this.sun.set(direction.x, direction.y, direction.z).normalize();
     this.sunColor.setHSL(0.1, 0.25 + (1 - Math.max(0, this.sun.y)) * 0.35, 0.75);
   }
-  refreshEnvironment() {
+  refreshEnvironment(force = false) {
+    if (force) {
+      this.updateSun();
+      this.sky.sunPosition.value.copy(this.sun).multiplyScalar(20000);
+      this.sky.cloudCoverage.value = clamp(this.config.ocean.cloudCover + this.sim.weather * 0.3, 0, 1);
+    }
     const now = performance.now();
     if (
-      this.underwater ||
-      now - this.lastEnvironmentUpdate < this.config.graphics.environmentRefresh * 1000 ||
-      (this.environmentSun.dot(this.sun) > 0.985 &&
-        Math.abs(this.sky.cloudCoverage.value - this.environmentCloud) < 0.06)
+      !force &&
+      (this.underwater ||
+        now - this.lastEnvironmentUpdate < this.config.graphics.environmentRefresh * 1000 ||
+        (this.environmentSun.dot(this.sun) > 0.985 &&
+          Math.abs(this.sky.cloudCoverage.value - this.environmentCloud) < 0.06))
     )
       return;
     const disc = this.sky.showSunDisc.value;
@@ -280,6 +308,7 @@ export class View {
         reflectivity: 0,
         depthWrite: false,
         side: THREE.DoubleSide,
+        map: dropletTexture('spray'),
         alphaMap: this.ocean.foamMap.value,
         alphaTest: 0.015,
       }),
@@ -338,27 +367,12 @@ export class View {
       vy: options.vy ?? (kind === 'smoke' || kind === 'bubble' ? 1 + r() * 2 : 2 + r() * 5),
       vz: options.vz ?? (r() - 0.5) * 4,
       age: 0,
+      lastTime: options.born ?? this.sim.visualTime,
       life: options.life ?? (kind === 'smoke' || kind === 'bubble' ? 10 : 1.2 + r()),
       kind,
       size,
       stretch: options.stretch ?? 1,
     });
-  }
-  trail(id, x, z, speed, width, dt) {
-    let trail = this.trails.get(id);
-    if (!trail) {
-      trail = [];
-      this.trails.set(id, trail);
-    }
-    const last = trail[trail.length - 1];
-    if (speed > 0.4 && (!last || Math.hypot(deltaX(x, last.x), z - last.z) > 4))
-      trail.push({ x, z, width, age: 0 });
-    for (const p of trail) p.age += dt;
-    while (
-      trail.length &&
-      (trail[0].age > this.config.ocean.wakeLength / Math.max(3, speed) || trail.length > 160)
-    )
-      trail.shift();
   }
   updateTerrain() {
     const p = this.sim.p,
@@ -423,6 +437,24 @@ export class View {
     const sim = this.sim,
       p = sim.p,
       c = this.config;
+    const interpolate =
+      !attract &&
+      !sim.paused &&
+      !sim.training &&
+      !window.greywake?.app.waterLab?.active &&
+      sim.previousPose &&
+      sim.acceleration <= 20;
+    const alpha = interpolate ? Math.min(1, sim.localAccumulator * 30) : 1;
+    sim.renderAlpha = alpha;
+    sim.renderTime = attract
+      ? sim.visualTime + (window.greywake?.app.previewTime || 0)
+      : interpolate
+        ? Math.max(0, sim.visualTime - (1 - alpha) / 30)
+        : sim.visualTime;
+    sim.renderWeather = interpolate
+      ? sim.previousPose.weather * (1 - alpha) + sim.weather * alpha
+      : sim.weather;
+    this.renderer.toneMappingExposure = c.graphics.exposure;
     this.frameCount++;
     this.frameTime += wallDt;
     if (this.frameTime > 1) {
@@ -437,10 +469,15 @@ export class View {
     this.sky.cloudSpeed.value = 0.00004 * c.ocean.waveSpeed;
     this.light.position.copy(this.sun).multiplyScalar(500);
     this.light.color.copy(this.sunColor);
-    this.light.intensity = Math.max(0.15, this.sun.y * 4.5);
+    this.light.intensity = Math.max(
+      0.08,
+      this.sun.y * 4.5 * sunlightTransmission(this.sky.cloudCoverage.value),
+    );
     this.ambient.intensity = Math.max(0.18, 0.65 + this.sun.y * 1.2);
     this.scene.environmentIntensity = Math.max(0.06, 0.3 + this.sun.y * 0.7);
-    const fxDt = sim.paused || p.hp <= 0 ? 0 : dt;
+    const fxDt =
+      attract || p.hp <= 0 ? 0 : Math.max(0, sim.visualTime - (this.lastEffectTime ?? sim.visualTime));
+    this.lastEffectTime = sim.visualTime;
     const motion = attract ? this.attractMotion : sim.waterMotion;
     let bodyY = sim.body.translation().y;
     if (attract) {
@@ -456,9 +493,26 @@ export class View {
     this.scopeExtension.position.set(-0.7, 12.4 + extension * 0.5, 0.3);
     this.scopeExtension.scale.y = Math.max(0.01, extension);
     this.scopeEye.position.set(-0.7, 12.4 + extension, 0.3);
-    this.sub.position.set(0, bodyY, 0);
-    this.sub.rotation.set(motion.pitch, -p.heading, motion.roll);
-    this.sub.userData.waterWetness.value = p.depth > 3 ? 1 : sim.waterMotion.wetness;
+    const previous = interpolate ? sim.previousPose : null;
+    if (previous) bodyY = previous.y * (1 - alpha) + bodyY * alpha;
+    this.sub.position.set(
+      previous ? deltaX(previous.x, p.x) * (1 - alpha) : 0,
+      bodyY,
+      previous ? (previous.z - p.z) * (1 - alpha) : 0,
+    );
+    const headingDelta = previous
+      ? Math.atan2(Math.sin(p.heading - previous.heading), Math.cos(p.heading - previous.heading))
+      : 0;
+    this.sub.rotation.set(
+      previous ? previous.pitch * (1 - alpha) + motion.pitch * alpha : motion.pitch,
+      previous ? -(previous.heading + headingDelta * alpha) : -p.heading,
+      previous ? previous.roll * (1 - alpha) + motion.roll * alpha : motion.roll,
+      'YXZ',
+    );
+    this.sub.userData.waterWetness.value = Math.max(
+      sim.waterMotion.wetness,
+      1 - immersionEnvelope(p.depth, c.waterMotion.immersionDistance),
+    );
     for (const [id, model] of this.shipModels)
       if (!sim.ships.some((s) => s.id === id)) {
         this.scene.remove(model);
@@ -479,45 +533,45 @@ export class View {
       if (attract)
         model.position.y =
           hullWaterPose(sim, ship, ship.length, ship.width, shipMotion, dt) - ship.sinkTime * 0.2;
-      model.rotation.set(shipMotion.pitch, -ship.heading, shipMotion.roll + ship.sinkTime * 0.006);
+      const oldPose = interpolate ? ship.previousPose : null;
+      if (oldPose) {
+        model.position.x += deltaX(oldPose.x, ship.x) * (1 - alpha);
+        model.position.z += (oldPose.z - ship.z) * (1 - alpha);
+        model.position.y = oldPose.y * (1 - alpha) + model.position.y * alpha;
+        const heading =
+          oldPose.heading +
+          Math.atan2(Math.sin(ship.heading - oldPose.heading), Math.cos(ship.heading - oldPose.heading)) *
+            alpha;
+        model.rotation.set(
+          oldPose.pitch * (1 - alpha) + shipMotion.pitch * alpha,
+          -heading,
+          oldPose.roll * (1 - alpha) + shipMotion.roll * alpha + ship.sinkTime * 0.006,
+          'YXZ',
+        );
+      } else
+        model.rotation.set(shipMotion.pitch, -ship.heading, shipMotion.roll + ship.sinkTime * 0.006, 'YXZ');
       model.userData.waterWetness.value = ship.hp <= 0 ? 1 : ship.motion.wetness;
       model.visible = Math.hypot(model.position.x, model.position.z) < c.graphics.viewDistance;
-      if (ship.hp > 0)
-        this.trail(
-          ship.id,
-          ship.x - Math.sin(ship.heading) * ship.length * 0.42,
-          ship.z + Math.cos(ship.heading) * ship.length * 0.42,
-          sim.effectiveShipSpeed(ship),
-          ship.width,
-          fxDt,
-        );
     }
-    this.trail(
-      'player',
-      p.x - Math.sin(p.heading) * 29,
-      p.z + Math.cos(p.heading) * 29,
-      p.depth < 4 ? p.speed : 0,
-      5,
-      fxDt,
-    );
-    for (const t of sim.torpedoes) this.trail(`torp${t.id}`, t.x, t.z, c.combat.torpedoSpeed, 0.8, fxDt);
     this.emission += fxDt;
     if (this.emission > 0.05) {
       this.emission = 0;
       for (const event of sim.water.sprayEvents.splice(0)) {
         for (const side of [-1, 1]) {
-          for (let i = 0; i < Math.ceil(event.strength * 4); i++) {
+          for (let i = 0; i < Math.min(16, Math.ceil(event.strength * 4)); i++) {
             const lateral = side * (2 + this.rng() * 3) * event.strength;
             this.emit(
               p.x + event.x - sim.oceanX + Math.cos(event.heading) * side * event.width * 0.3,
               event.z + Math.sin(event.heading) * side * event.width * 0.3,
               'spray',
-              0.3 + event.strength * 0.4,
+              (0.3 + event.strength * 0.4) * c.waterInteraction.dropletSize,
               {
                 y: event.y + 0.2,
                 vx: Math.cos(event.heading) * lateral + Math.sin(event.heading) * p.speed * 0.3,
                 vz: Math.sin(event.heading) * lateral - Math.cos(event.heading) * p.speed * 0.3,
                 vy: 2 + this.rng() * event.strength * 7,
+                life: (1.2 + this.rng()) * c.waterInteraction.dropletLifetime,
+                born: event.born ?? sim.visualTime,
               },
             );
           }
@@ -546,13 +600,13 @@ export class View {
         }
       for (const e of sim.effects)
         if (e.type === 'water-impact') {
-          const attenuation = Math.exp(-e.depth / 28),
+          const attenuation = Math.exp(-e.depth / c.waterInteraction.impactDepth),
             shell = e.kind === 'shell';
           if (e.age < (shell ? 0.35 : 0.9)) {
             for (let i = 0; i < (shell ? 5 : 12); i++) {
               const angle = this.rng() * Math.PI * 2,
                 radius = (shell ? 1.3 : 5) * this.rng(),
-                energy = Math.sqrt(e.energy) * attenuation;
+                energy = Math.sqrt(e.energy) * attenuation * c.waterInteraction.impactSpray;
               if (energy > 0.12)
                 this.emit(
                   e.x + Math.cos(angle) * radius,
@@ -583,13 +637,26 @@ export class View {
       smokeN = 0,
       bubbleN = 0;
     for (const particle of this.particles) {
-      particle.age += fxDt;
-      particle.x += particle.vx * fxDt;
-      particle.z += particle.vz * fxDt;
-      particle.y += particle.vy * fxDt;
-      if (particle.kind === 'spray') particle.vy -= 9.81 * fxDt;
-      if (particle.kind === 'bubble' && particle.y >= sim.sampleWater(particle.x, particle.z)) {
-        particle.age = particle.life;
+      const particleDt = Math.max(0, sim.visualTime - (particle.lastTime ?? sim.visualTime - fxDt));
+      particle.lastTime = sim.visualTime;
+      particle.age += particleDt;
+      particle.x += particle.vx * particleDt;
+      particle.z += particle.vz * particleDt;
+      particle.y +=
+        particle.vy * particleDt - (particle.kind === 'spray' ? 0.5 * 9.81 * particleDt * particleDt : 0);
+      if (particle.kind === 'spray') particle.vy -= 9.81 * particleDt;
+      if (particleDt > 0 && (particle.kind === 'spray' || particle.kind === 'bubble')) {
+        const waterHeight = sim.water.sample(
+          sim.oceanX + deltaX(particle.x, p.x),
+          particle.z,
+          sim.visualTime,
+          sim.weather,
+        );
+        if (
+          (particle.kind === 'spray' && particle.vy < 0 && particle.y <= waterHeight) ||
+          (particle.kind === 'bubble' && particle.y >= waterHeight)
+        )
+          particle.age = particle.life;
       }
       this.dummy.position.set(deltaX(particle.x, p.x), particle.y, particle.z - p.z);
       this.dummy.quaternion.copy(this.camera.quaternion);
@@ -616,27 +683,47 @@ export class View {
     this.smoke.instanceMatrix.needsUpdate = true;
     this.bubbles.instanceMatrix.needsUpdate = true;
     let foamN = 0;
-    for (const [id, trail] of this.trails) {
-      const active =
-        id === 'player' ||
-        sim.ships.some((s) => s.id === id) ||
-        sim.torpedoes.some((t) => `torp${t.id}` === id);
-      if (!active) {
-        for (const q of trail) q.age += fxDt;
-        if (!trail.length || trail[0].age > 100) this.trails.delete(id);
-      }
+    for (const trail of sim.water.wakeHistory.values()) {
       for (let i = 0; i < trail.length && foamN < 1200; i++) {
         const q = trail[i],
-          fade = Math.max(0, 1 - q.age / 75),
-          size = q.width * (0.7 + q.age * 0.015) * fade * c.graphics.foam;
-        if (
-          Math.abs(deltaX(q.x, p.x)) < sim.water.interactions.size * 0.35 &&
-          Math.abs(q.z - p.z) < sim.water.interactions.size * 0.35
-        )
-          continue;
-        this.dummy.position.set(deltaX(q.x, p.x), sim.sampleWater(q.x, q.z) + 0.12, q.z - p.z);
-        this.dummy.rotation.set(-Math.PI / 2, 0, i * 0.83);
-        this.dummy.scale.set(size, size * 2, 1);
+          age = sim.visualTime - q.born;
+        const radius = Math.max(
+          Math.abs(q.x - sim.water.interactions.x),
+          Math.abs(q.z - sim.water.interactions.z),
+        );
+        const edge = clamp(
+          (radius / sim.water.interactions.size - LOCAL_FOAM_BLEND_START) /
+            (LOCAL_FOAM_BLEND_END - LOCAL_FOAM_BLEND_START),
+          0,
+          1,
+        );
+        const farBlend = edge * edge * (3 - 2 * edge);
+        if (!farBlend) continue;
+        const fade = Math.exp(-age / c.ocean.foamLifetime),
+          size =
+            q.width *
+            (0.7 + age * 0.015) *
+            fade *
+            Math.sqrt(farBlend) *
+            c.graphics.foam *
+            c.waterInteraction.propellerGain;
+        this.dummy.position.set(
+          q.x - sim.oceanX,
+          sim.sampleWater(p.x + q.x - sim.oceanX, q.z) + 0.12,
+          q.z - p.z,
+        );
+        const next = trail[Math.min(i + 1, trail.length - 1)],
+          previous = trail[Math.max(i - 1, 0)],
+          dx = next.x - previous.x,
+          dz = next.z - previous.z,
+          spacing = Math.max(
+            Math.hypot(q.x - previous.x, q.z - previous.z),
+            Math.hypot(next.x - q.x, next.z - q.z),
+          );
+        const heading = Math.abs(dx) + Math.abs(dz) > 0.001 ? Math.atan2(dx, -dz) : q.heading;
+        this.dummy.rotation.set(-Math.PI / 2, 0, -heading);
+        // Fade width, retaining overlap along the recorded path as old foam thins.
+        this.dummy.scale.set(size, Math.max(size * 2, Math.min(16, spacing * 2)), 1);
         this.dummy.updateMatrix();
         this.foam.setMatrixAt(foamN++, this.dummy.matrix);
       }
@@ -685,19 +772,88 @@ export class View {
       cameraPos.set(0, 650, 200);
       look.set(0, 0, -80);
     }
+    if (this.labCamera) {
+      const { bookmark, fixed, anchor } = this.labCamera;
+      const positions = {
+        'low bow': [0, 3.2, -95],
+        broadside: [105, 12, 0],
+        'stern / wake': [0, 18, 150],
+        overhead: [0, 430, 10],
+        'underwater up': [45, -18, 40],
+        'surface crossing': [40, 0.3, -35],
+      };
+      const position = positions[bookmark];
+      if (position) {
+        const ca = Math.cos(p.heading + this.orbit),
+          sa = Math.sin(p.heading + this.orbit);
+        cameraPos.set(
+          position[0] * ca - position[2] * sa,
+          position[1] + this.elevation,
+          position[0] * sa + position[2] * ca,
+        );
+        look.set(0, bookmark === 'underwater up' ? 5 : bodyY + 2, 0);
+      }
+      if (fixed) {
+        const pose = (this.labCamera.pose ||= {
+          x: cameraPos.x,
+          y: cameraPos.y,
+          z: cameraPos.z,
+          tx: look.x,
+          ty: look.y,
+          tz: look.z,
+        });
+        cameraPos.set(pose.x, pose.y, pose.z);
+        look.set(pose.tx, pose.ty, pose.tz);
+        cameraPos.x += deltaX(anchor.x, p.x);
+        cameraPos.z += anchor.z - p.z;
+        look.x += deltaX(anchor.x, p.x);
+        look.z += anchor.z - p.z;
+      }
+    }
+    if (this.snapCamera) {
+      this.camera.position.copy(cameraPos);
+      this.snapCamera = false;
+    }
     this.camera.position.lerp(cameraPos, 1 - Math.exp(-dt * 3.5));
     this.camera.lookAt(look);
+    if (this.comparisonCamera) {
+      this.camera.position.copy(this.comparisonCamera.position);
+      this.camera.quaternion.copy(this.comparisonCamera.rotation);
+    }
+    if (this.probeOverlay.visible) {
+      const probes = sim.waterMotion.probes || [];
+      for (let i = 0; i < probes.length; i++) {
+        const probe = probes[i];
+        const support = clamp(probe.support, -8, 8),
+          reference = bodyY + 2 + motion.pitch * probe.along + motion.roll * probe.across;
+        this.dummy.position.set(deltaX(probe.x, p.x), reference + support * 0.5, probe.z - p.z);
+        this.dummy.rotation.set(0, 0, 0);
+        this.dummy.scale.set(0.5, Math.max(0.25, Math.abs(support) / 1.4), 0.5);
+        this.probeOverlay.setColorAt(i, support >= 0 ? this.probeUp : this.probeDown);
+        this.dummy.updateMatrix();
+        this.probeOverlay.setMatrixAt(i, this.dummy.matrix);
+      }
+      this.probeOverlay.count = probes.length;
+      this.probeOverlay.instanceMatrix.needsUpdate = true;
+      if (this.probeOverlay.instanceColor) this.probeOverlay.instanceColor.needsUpdate = true;
+    }
     const surfaceHeight = sim.sampleWater(p.x + this.camera.position.x, p.z + this.camera.position.z);
-    this.underwater = this.camera.position.y < surfaceHeight - 0.4;
-    const immersion = clamp((surfaceHeight - this.camera.position.y + 0.15) / 0.9, 0, 1);
-    this.underwaterBlend += (immersion - this.underwaterBlend) * (1 - Math.exp(-dt * 12));
+    const crossing = c.waterAppearance.transitionWidth;
+    const immersion = clamp((surfaceHeight - this.camera.position.y) / crossing + 0.5, 0, 1);
+    if (this.underwater && immersion < 0.35) this.underwater = false;
+    else if (!this.underwater && immersion > 0.65) this.underwater = true;
+    this.underwaterBlend = immersion;
+    this.underwaterBackground
+      .set(c.waterAppearance.underwaterColor)
+      .multiplyScalar(c.waterAppearance.scatterGain);
     this.scene.fog.color.copy(this.airFogColor).lerp(this.underwaterBackground, this.underwaterBlend);
     this.scene.fog.density =
       ((1 + sim.weather * 2) / c.graphics.viewDistance) * 0.48 * (1 - this.underwaterBlend) +
-      (0.8 / c.ocean.clarity) * this.underwaterBlend;
+      ((0.8 * c.waterAppearance.extinction) / c.ocean.clarity) * this.underwaterBlend;
     this.scene.background = this.underwater ? this.underwaterBackground : null;
     this.sky.visible = !this.underwater;
     this.ocean.cameraUnderwater = this.underwater;
+    this.ocean.cameraImmersion = this.underwaterBlend;
     this.refreshEnvironment();
     this.sub.visible = this.mode !== 'periscope';
     this.ocean.update(sim, this.sun, this.sunColor);
@@ -714,6 +870,9 @@ export class View {
     this.ocean.captureRefraction(this.renderer, this.camera);
     this.renderer.render(this.scene, this.camera);
     this.cpuMs = performance.now() - cpuStart;
+    delete sim.renderTime;
+    delete sim.renderAlpha;
+    delete sim.renderWeather;
   }
   diagnostics() {
     return {
@@ -742,6 +901,20 @@ export class View {
           height: this.ocean.refractionTarget.height,
         },
         activeImpacts: this.sim.water.impacts.length,
+        phase: this.sim.water.phase,
+        phaseClock: this.sim.water.clockTime,
+        requestedChop: this.config.ocean.choppiness,
+        effectiveChop: this.sim.water.effectiveChop,
+        derivativeLimit: this.sim.water.derivativeLimit,
+        minimumJacobian: this.sim.water.minJacobian,
+        maximumQueryResidual: this.sim.water.maxResidual,
+        solverSubsteps: this.sim.water.interactions.substeps || 0,
+        courant: this.sim.water.interactions.courant || 0,
+        cpuTimings: { ...this.sim.water.timings },
+        wakeTrails: this.sim.water.wakeHistory.size,
+        physicsTime: this.sim.p.time,
+        achievedAcceleration: this.sim.achievedAcceleration || 0,
+        requestedAcceleration: this.sim.acceleration,
         particles: { spray: this.spray.count, bubbles: this.bubbles.count, foam: this.foam.count },
       },
       userAgent: navigator.userAgent,

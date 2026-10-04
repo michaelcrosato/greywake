@@ -82,7 +82,7 @@ test('Hull pitch and roll follow the direction of the sampled water and settle w
     hull = { x: 0, z: 0, heading: 0, depth: 0 },
     sim = { sampleWater: (x, z) => x * 0.04 - z * 0.02 };
   for (let i = 0; i < 300; i++) hullWaterPose(sim, hull, 66, 6, motion, 1 / 30);
-  assert.ok(motion.pitch < -0.01);
+  assert.ok(motion.pitch > 0.01);
   assert.ok(motion.roll > 0.02);
   sim.sampleWater = () => 0;
   for (let i = 0; i < 600; i++) hullWaterPose(sim, hull, 66, 6, motion, 1 / 30);

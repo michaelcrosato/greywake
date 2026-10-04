@@ -1,4 +1,8 @@
+import { validateSetting } from './setting-controls.js';
+import { WATER_SETTINGS } from './water-settings.js';
+
 export const SETTINGS = {
+  ...WATER_SETTINGS,
   graphics: {
     pixelRatio: ['Resolution scale', 1.25, 0.5, 2.5, 0.05],
     oceanSegments: ['Near-water tessellation', 160, 48, 320, 16],
@@ -20,11 +24,11 @@ export const SETTINGS = {
     sound: ['Sound volume', 0.35, 0, 1, 0.05],
   },
   ocean: {
-    waveHeight: ['Swell height · m', 1.5, 0.1, 6, 0.1],
+    waveHeight: ['Wave height coefficient', 1.5, 0, 6, 0.1],
     waveSpeed: ['Wave time scale', 1, 0.1, 3, 0.1],
     choppiness: ['Wave choppiness', 0.65, 0, 1.3, 0.05],
-    windSpeed: ['Wind speed · m/s', 9, 2, 22, 0.5],
-    windDirection: ['Wind direction · degrees', 315, 0, 360, 5],
+    windSpeed: ['Wind speed · m/s', 9, 0, 22, 0.5],
+    windDirection: ['Wind travel toward · degrees', 315, 0, 360, 5],
     foamLifetime: ['Wake foam lifetime · seconds', 45, 8, 100, 1],
     clarity: ['Underwater visibility · m', 65, 15, 180, 5],
     crestLight: ['Light through wave crests', 0.65, 0, 1.5, 0.05],
@@ -129,19 +133,12 @@ export function defaults() {
   );
 }
 
-export function validateConfig(raw) {
+export function validateConfig(raw, options = {}) {
   const result = defaults();
   for (const [group, fields] of Object.entries(SETTINGS)) {
     for (const [key, spec] of Object.entries(fields)) {
       const value = raw?.[group]?.[key];
-      if (typeof spec[1] === 'boolean') result[group][key] = typeof value === 'boolean' ? value : spec[1];
-      else if (Number.isFinite(value))
-        result[group][key] = spec[5]
-          ? spec[5].reduce(
-              (best, option) => (Math.abs(option - value) < Math.abs(best - value) ? option : best),
-              spec[5][0],
-            )
-          : Math.min(spec[3], Math.max(spec[2], value));
+      if (value !== undefined) result[group][key] = validateSetting(spec, value, options);
     }
   }
   return result;

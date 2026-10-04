@@ -150,10 +150,16 @@ test('Combat time compression remains physical and is bounded at 20x; normal mod
   sim.setDeveloper({ enabled: true, combatTime: true });
   assert.equal(sim.setAcceleration(1000), true);
   assert.equal(sim.acceleration, 20);
-  const ticks = sim.physicsTicks;
+  const ticks = sim.physicsTicks,
+    time = sim.p.time,
+    visualTime = sim.visualTime;
   sim.update(0.1);
   assert.equal(sim.acceleration, 20);
-  assert.ok(sim.physicsTicks - ticks >= 60);
+  const accepted = sim.p.time - time;
+  assert.ok(accepted > 0 && accepted <= 2);
+  assert.ok(Math.abs(accepted - (sim.physicsTicks - ticks) / 30) < 1e-8);
+  assert.ok(Math.abs(sim.visualTime - visualTime - accepted) < 1e-8);
+  assert.ok(sim.achievedAcceleration > 0 && sim.achievedAcceleration <= sim.acceleration);
   sim.setDeveloper({ enabled: false });
   assert.equal(sim.acceleration, 1);
   sim.dispose();
