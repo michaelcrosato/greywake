@@ -9,6 +9,7 @@ import {
   UPGRADES,
   validateConfig,
 } from './config.js';
+import { DeveloperPanel } from './developer-panel.js';
 import { manualHTML, welcomeHTML } from './guide.js';
 import { worldClock } from './lighting.js';
 import {
@@ -42,6 +43,7 @@ const positionText = (p) => {
 export class UI {
   constructor(app) {
     this.app = app;
+    this.developerPanel = new DeveloperPanel(app);
     this.sim = app.sim;
     this.panel = null;
     this.settingsGroup = 'graphics';
@@ -71,6 +73,13 @@ export class UI {
         this.drawPanel();
       }
     });
+    const badge = document.createElement('button');
+    badge.id = 'developer-badge';
+    badge.className = 'developer-badge';
+    badge.textContent = 'DEV MODE · F2';
+    badge.hidden = true;
+    badge.onclick = () => this.open('developer');
+    document.getElementById('game-root').append(badge);
     $('begin').onclick = () => app.begin();
     $('launch-settings').onclick = () => this.open('settings');
     $('launch-orientation').onclick = () => this.open('orientation');
@@ -196,9 +205,12 @@ export class UI {
       this.pauseBefore = this.sim.paused;
     }
     this.panel = panel;
-    this.sim.paused = panel !== 'settings' ? true : this.pauseBefore;
+    this.sim.paused = !['settings', 'developer'].includes(panel) ? true : this.pauseBefore;
     $('modal').hidden = false;
-    document.querySelector('.modal').classList.toggle('settings-modal', panel === 'settings');
+    document
+      .querySelector('.modal')
+      .classList.toggle('settings-modal', ['settings', 'developer'].includes(panel));
+    document.querySelector('.modal').classList.toggle('developer-modal', panel === 'developer');
     this.drawPanel();
     $('close-modal').focus();
   }
@@ -218,6 +230,7 @@ export class UI {
       refit: 'Make her your own',
       log: 'Captain’s log',
       settings: 'Graphics & playtest settings',
+      developer: 'Developer mode & playtesting',
       orientation: 'Welcome aboard, captain',
       manual: 'Captain’s field manual',
     };
@@ -282,6 +295,7 @@ export class UI {
       };
     }
     if (this.panel === 'settings') this.drawSettings();
+    if (this.panel === 'developer') this.developerPanel.draw();
   }
   drawSettings() {
     const config = this.sim.config,
@@ -378,6 +392,11 @@ export class UI {
     diagnostics.onclick = () =>
       this.download('greywake-rendering.json', JSON.stringify(this.app.view.diagnostics(), null, 2));
     document.querySelector('#modal-content .file-actions').append(diagnostics);
+    const developer = document.createElement('button');
+    developer.id = 'open-developer';
+    developer.textContent = 'Developer mode · F2';
+    developer.onclick = () => this.open('developer');
+    document.querySelector('#modal-content .file-actions').prepend(developer);
     if (window.gameBoot) {
       const startup = document.createElement('button');
       startup.textContent = 'Startup diagnostics';
@@ -436,6 +455,23 @@ export class UI {
       this.updateWaypoint();
       this.drawChart();
     };
+    if (this.sim.developer.enabled) {
+      const teleport = document.createElement('button');
+      teleport.id = 'dev-chart-teleport';
+      teleport.textContent = 'Teleport to selected point';
+      teleport.className = 'secondary';
+      teleport.onclick = () => {
+        try {
+          if (!this.chartDestination) throw new Error('Choose a chart point or harbor first.');
+          if (this.chartDestination.region) this.developerPanel.teleportPort(this.chartDestination);
+          else this.developerPanel.teleport(this.chartDestination, 0, (this.sim.p.heading * 180) / Math.PI);
+          this.close();
+        } catch (error) {
+          this.toast(error.message);
+        }
+      };
+      document.querySelector('.chart-side').append(teleport);
+    }
     $('set-course').onclick = () => {
       if (this.chartDestination && this.sim.setDestination(this.chartDestination, this.chartDestination.name))
         this.close();
@@ -623,6 +659,8 @@ export class UI {
     if (this.lastUpdate < 0.1) return;
     this.lastUpdate = 0;
     $('region').textContent = regionName(p.x, p.z).toUpperCase();
+    $('developer-badge').hidden = !this.sim.developer.enabled || !!this.panel;
+    if (this.panel === 'developer') this.developerPanel.update();
     $('heading').textContent =
       `${String(Math.round(((p.heading * 180) / Math.PI + 360) % 360)).padStart(3, '0')}°`;
     $('bounty').textContent = number(p.bounty);
@@ -678,7 +716,7 @@ export class UI {
     for (const kind of ['torpedo', 'gun']) {
       const readiness = sim.weaponReadiness(kind);
       $(`${kind}-status`).textContent = readiness.ready
-        ? `${readiness.ammo} ${kind === 'torpedo' ? 'TORPEDOES READY' : 'SHELLS READY'}`
+        ? `${Number.isFinite(readiness.ammo) ? readiness.ammo : '∞'} ${kind === 'torpedo' ? 'TORPEDOES READY' : 'SHELLS READY'}`
         : readiness.reason;
       $(kind).disabled = !readiness.ready;
       $(kind).title =

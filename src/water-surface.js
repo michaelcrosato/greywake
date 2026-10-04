@@ -591,7 +591,12 @@ export class OceanSurface {
         },
         ...sim.ships
           .filter((s) => Math.abs(deltaX(s.x, p.x)) < 240 && Math.abs(s.z - p.z) < 240)
-          .map((s) => ({ ...s, x: x + deltaX(s.x, p.x), depth: 0 })),
+          .map((s) => ({
+            ...s,
+            speed: sim.effectiveShipSpeed?.(s) ?? s.speed,
+            x: x + deltaX(s.x, p.x),
+            depth: 0,
+          })),
       ];
       for (const boat of sources) {
         if (boat.depth > 6) continue;

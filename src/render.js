@@ -213,6 +213,19 @@ export class View {
     this.sim.water.resizeInteractions();
     this.ocean.bindSurface(this.sim.water);
   }
+  clearWorldVisuals() {
+    this.trails.clear();
+    for (const model of this.shipModels.values()) {
+      this.scene.remove(model);
+      for (const material of model.userData.waterMaterials || []) material.dispose();
+    }
+    this.shipModels.clear();
+    this.particles = [];
+    this.spray.count = this.foam.count = this.smoke.count = this.bubbles.count = 0;
+    this.tracers.count = this.fireballs.count = 0;
+    this.emission = 0;
+    this.terrainKey = '';
+  }
   updateSun() {
     const clock = worldClock(this.sim.p, this.config),
       direction = sunlight(clock.hour, -this.sim.p.z / 111000);
@@ -474,7 +487,7 @@ export class View {
           ship.id,
           ship.x - Math.sin(ship.heading) * ship.length * 0.42,
           ship.z + Math.cos(ship.heading) * ship.length * 0.42,
-          ship.speed,
+          sim.effectiveShipSpeed(ship),
           ship.width,
           fxDt,
         );

@@ -1,5 +1,6 @@
 import RAPIER from '@dimforge/rapier3d-compat';
 import { HEADS, SKILLS, UPGRADES } from './config.js';
+import { DEV_SETTINGS, developerDefaults, validateDeveloper } from './developer-settings.js';
 import {
   AI_STATES,
   coordinateFleet,
@@ -146,6 +147,7 @@ export class Simulation {
     this.training = !!options.training;
     this.ambientTraffic = options.ambientTraffic !== false;
     this.invulnerable = !!options.invulnerable;
+    this.developer = developerDefaults();
     this.aiRecording = !!options.recordAI;
     this.aiDamage = 0;
     this.aiEvents = [];
@@ -283,6 +285,8 @@ export class Simulation {
       config: structuredClone(this.config),
       encounter: {
         version: 1,
+        developer: { ...this.developer },
+        developerSpeed: this.developer.enabled ? this.p.speed : 0,
         ships,
         torpedoes,
         charges: structuredClone(this.charges),
@@ -488,7 +492,11 @@ export class Simulation {
     );
     this.cooldown = finite(raw.cooldown, 0, 0, 120);
     this.gunCooldown = finite(raw.gunCooldown, 0, 0, 120);
+    this.setDeveloper(validateDeveloper(raw.developer));
+    if (this.developer.enabled) this.p.speed = finite(raw.developerSpeed, this.p.speed, 0, 1000);
     this.acceleration = finite(raw.acceleration, 1, 1, this.config.navigation.travelMultiplier);
+    if (this.inCombat() && this.acceleration > 1)
+      this.acceleration = this.dev('combatTime') ? Math.min(20, this.acceleration) : 1;
     this.body.setTranslation({ x: 0, y: finite(raw.body?.y, -2 - this.p.depth, -600, 30), z: 0 }, true);
     this.body.setLinvel(
       {
@@ -520,6 +528,7 @@ export class Simulation {
     return (
       base *
       KNOT *
+      this.dev('speedMultiplier') *
       (1 +
         (this.p.skills.navigator || 0) * 0.08 +
         (this.p.upgrades.engine || 0) * 0.1 +
@@ -630,7 +639,7 @@ export class Simulation {
     return ship;
   }
   spawnOpening() {
-    if (this.training || !this.ambientTraffic) return;
+    if (this.training || !this.ambientTraffic || this.dev('pauseTraffic')) return;
     const p = this.p;
     if (p.sunk === 0 && p.time < 300) {
       const a = this.addShip(p.x + 380, p.z - 480, 0.8, false, 96);
@@ -642,7 +651,7 @@ export class Simulation {
     this.stream();
   }
   stream() {
-    if (this.training || !this.ambientTraffic) return;
+    if (this.training || !this.ambientTraffic || this.dev('pauseTraffic')) return;
     const p = this.p,
       r = Math.ceil(this.config.world.streamRadius / CELL),
       cx = Math.floor(p.x / CELL),
@@ -714,11 +723,16 @@ export class Simulation {
     return true;
   }
   setAcceleration(value) {
-    if (this.inCombat() && value > 1) {
+    if (!Number.isFinite(value) || value < 1) return false;
+    if (this.inCombat() && value > 1 && !this.dev('combatTime')) {
       this.message('Time acceleration unavailable near contacts. Clear the area first.');
       return false;
     }
-    this.acceleration = Math.min(this.config.navigation.travelMultiplier, value);
+    this.acceleration = Math.min(
+      this.config.navigation.travelMultiplier,
+      value,
+      this.inCombat() ? 20 : Infinity,
+    );
     return true;
   }
   inCombat() {
@@ -740,11 +754,14 @@ export class Simulation {
     this.p.targetDepth = clamp(depth, 0, this.maxDepth());
   }
 
+  effectiveShipSpeed(ship) {
+    return this.dev('freezeEnemies') ? 0 : ship.speed;
+  }
   intercept(target, speed) {
     const rx = deltaX(target.x, this.p.x),
       rz = target.z - this.p.z;
-    const vx = Math.sin(target.heading) * target.speed,
-      vz = -Math.cos(target.heading) * target.speed;
+    const vx = Math.sin(target.heading) * this.effectiveShipSpeed(target),
+      vz = -Math.cos(target.heading) * this.effectiveShipSpeed(target);
     const a = vx * vx + vz * vz - speed * speed,
       b = 2 * (rx * vx + rz * vz),
       c = rx * rx + rz * rz;
@@ -776,8 +793,8 @@ export class Simulation {
       this.message('Torpedo launch requires surface or periscope depth (18 m or less).');
       return false;
     }
-    if (this.cooldown > 0) return false;
-    if (p.torpedoes < 1) {
+    if (this.cooldown > 0 && !this.dev('noReload')) return false;
+    if (p.torpedoes < 1 && !this.dev('infiniteAmmo')) {
       this.message('Torpedo room empty. Resupply at a harbor.');
       return false;
     }
@@ -809,8 +826,10 @@ export class Simulation {
       targetId: target.id,
       wake: [],
     });
-    p.torpedoes--;
-    this.cooldown = c.torpedoReload * this.reloadMultiplier() * (1 - (p.upgrades.tubes || 0) * 0.08);
+    if (!this.dev('infiniteAmmo')) p.torpedoes--;
+    this.cooldown = this.dev('noReload')
+      ? 0
+      : c.torpedoReload * this.reloadMultiplier() * (1 - (p.upgrades.tubes || 0) * 0.08);
     this.acceleration = 1;
     this.events.push({ type: 'torpedo' });
     this.message(`Tube away. ${target.name}, estimated impact ${Math.ceil(solution.seconds)} seconds.`);
@@ -823,8 +842,8 @@ export class Simulation {
     const range = torpedo
       ? this.config.combat.torpedoRange * (1 + (p.skills.range || 0) * 0.15)
       : this.config.combat.gunRange;
-    const cooldown = torpedo ? this.cooldown : this.gunCooldown,
-      ammo = torpedo ? p.torpedoes : p.shells;
+    const cooldown = this.dev('noReload') ? 0 : torpedo ? this.cooldown : this.gunCooldown,
+      ammo = this.dev('infiniteAmmo') ? Infinity : torpedo ? p.torpedoes : p.shells;
     let reason = '';
     if (p.hp <= 0) reason = 'Boat lost';
     else if (this.paused) reason = 'Patrol paused · resume with P';
@@ -840,7 +859,7 @@ export class Simulation {
     const target = this.target(),
       p = this.p,
       c = this.config.combat;
-    if (p.hp <= 0 || this.gunCooldown > 0) return false;
+    if (p.hp <= 0 || (this.gunCooldown > 0 && !this.dev('noReload'))) return false;
     if (this.paused) {
       this.message('Resume the patrol before firing the deck gun.');
       return false;
@@ -853,21 +872,26 @@ export class Simulation {
       this.message('Deck gun needs a contact within range.');
       return false;
     }
-    if (p.shells <= 0) {
+    if (p.shells <= 0 && !this.dev('infiniteAmmo')) {
       this.message('Deck ammunition exhausted.');
       return false;
     }
-    p.shells--;
-    this.gunCooldown = c.gunReload * this.reloadMultiplier();
+    if (!this.dev('infiniteAmmo')) p.shells--;
+    this.gunCooldown = this.dev('noReload') ? 0 : c.gunReload * this.reloadMultiplier();
     this.acceleration = 1;
     const solution = this.intercept(target, c.shellSpeed),
       life = solution.seconds;
     const rng = random((this.nextId++ * 7919) ^ p.seed),
       spread = this.training ? 0 : (c.gunDispersion * distance(target, p)) / c.gunRange;
     const impactX = wrapX(
-      target.x + Math.sin(target.heading) * target.speed * life + (rng() - 0.5) * spread * 2,
+      target.x +
+        Math.sin(target.heading) * this.effectiveShipSpeed(target) * life +
+        (rng() - 0.5) * spread * 2,
     );
-    const impactZ = target.z - Math.cos(target.heading) * target.speed * life + (rng() - 0.5) * spread * 2;
+    const impactZ =
+      target.z -
+      Math.cos(target.heading) * this.effectiveShipSpeed(target) * life +
+      (rng() - 0.5) * spread * 2;
     this.effects.push({
       type: 'shell',
       x: p.x,
@@ -939,7 +963,7 @@ export class Simulation {
       this.aiDamage += damage;
       this.recordAI({ id: 0 }, 'damage', { amount: damage, kind });
     }
-    if (this.training || this.invulnerable) return;
+    if (this.training || this.invulnerable || this.dev('invulnerable')) return;
     if (this.p.hp <= 0) return;
     this.p.hp = Math.max(0, this.p.hp - damage);
     this.events.push({ type: 'hurt' });
@@ -1063,19 +1087,127 @@ export class Simulation {
     this.teleportBodies();
     this.message(`Recovered at ${port.name}. Salvage fee: 25% of current bounty. Career retained.`);
   }
-  teleportBodies() {
-    for (const s of this.ships) this.physics.removeRigidBody(s.body);
+  teleportBodies(preserveShips = false) {
+    if (!preserveShips) for (const s of this.ships) this.physics.removeRigidBody(s.body);
     for (const t of this.torpedoes) this.physics.removeRigidBody(t.body);
+    if (!preserveShips) {
+      this.ships = [];
+      this.streamed.clear();
+      this.targetId = null;
+    }
+    this.torpedoes = [];
+    this.charges = [];
+    this.effects = [];
+    this.detected = this.searching = false;
+    this.aiMessages = [];
+    this.collisionCooldown.clear();
+    this.resourceWarnings.clear();
+    this.cooldown = this.gunCooldown = 0;
+    this.acceleration = 1;
+    this.rudder = 0;
+    this.water = new OceanSurface(this.config);
+    this.waterMotion = newWaterMotion();
+    this.origin = { x: this.p.x, z: this.p.z };
+    this.oceanX = this.p.x;
+    for (const ship of this.ships)
+      ship.body.setTranslation(
+        { x: deltaX(ship.x, this.origin.x), y: ship.y, z: ship.z - this.origin.z },
+        true,
+      );
+    this.body.setTranslation({ x: 0, y: -2 - this.p.depth, z: 0 }, true);
+    this.body.setLinvel({ x: 0, y: 0, z: 0 }, true);
+    this.body.setAngvel({ x: 0, y: 0, z: 0 }, true);
+    this.body.resetForces(true);
+    this.body.setRotation(this.quaternion(this.p.heading), true);
+    this.stream();
+  }
+  dev(key) {
+    return this.developer.enabled ? this.developer[key] : DEV_SETTINGS[key][1];
+  }
+  setDeveloper(patch) {
+    const wasEnabled = this.developer.enabled;
+    this.developer = validateDeveloper({ ...this.developer, ...patch });
+    this.hullCollider.setSensor(!!this.dev('noClip'));
+    this.body.enableCcd(this.developer.enabled && !this.dev('noClip'));
+    if (wasEnabled && !this.developer.enabled) {
+      this.p.speed = Math.min(this.p.speed, this.speedLimit());
+      this.body.setLinvel(
+        {
+          x: Math.sin(this.p.heading) * this.p.speed,
+          y: this.body.linvel().y,
+          z: -Math.cos(this.p.heading) * this.p.speed,
+        },
+        true,
+      );
+    }
+    if (this.dev('invulnerable') && this.p.hp <= 0) this.p.hp = this.maxHp();
+    if (this.dev('noReload')) this.cooldown = this.gunCooldown = 0;
+    if (this.dev('infiniteResources')) this.p.fuel = this.p.battery = this.p.oxygen = 100;
+    if (!this.dev('combatTime') && this.inCombat()) this.acceleration = 1;
+    return this.developer;
+  }
+  clearEncounter() {
+    for (const ship of this.ships) this.physics.removeRigidBody(ship.body);
+    for (const torpedo of this.torpedoes) this.physics.removeRigidBody(torpedo.body);
     this.ships = [];
     this.torpedoes = [];
     this.charges = [];
     this.effects = [];
-    this.streamed.clear();
-    this.origin = { x: this.p.x, z: this.p.z };
-    this.oceanX = this.p.x;
-    this.body.setTranslation({ x: 0, y: -2 - this.p.depth, z: 0 }, true);
-    this.body.setLinvel({ x: 0, y: 0, z: 0 }, true);
-    this.stream();
+    this.targetId = null;
+    this.detected = this.searching = false;
+    this.aiMessages = [];
+    this.collisionCooldown.clear();
+    this.water.impacts = [];
+  }
+  developerTeleport(x, z, depth = this.p.depth, heading = this.p.heading, preserveShips = false) {
+    if (!this.developer.enabled) throw new Error('Enable developer mode first.');
+    if (
+      ![x, z, depth, heading].every(Number.isFinite) ||
+      Math.abs(x) > 180 * DEG ||
+      Math.abs(z) > 78 * DEG ||
+      depth < 0 ||
+      depth > 500
+    )
+      throw new Error('Enter valid coordinates and a depth from 0 to 500 m.');
+    x = wrapX(x);
+    if (!this.dev('noClip') && isLand(x, z))
+      throw new Error('Destination is on land. Choose open water or enable no collisions/grounding.');
+    Object.assign(this.p, {
+      x,
+      z,
+      depth,
+      targetDepth: depth,
+      heading: Math.atan2(Math.sin(heading), Math.cos(heading)),
+      speed: 0,
+      throttle: 0,
+      auto: false,
+      route: [],
+      destination: null,
+    });
+    this.teleportBodies(preserveShips);
+    this.message(
+      `Developer teleport: ${(x / DEG).toFixed(3)}° longitude, ${(-z / DEG).toFixed(3)}° latitude, ${depth} m.`,
+    );
+  }
+  developerStep(seconds) {
+    if (!this.developer.enabled || !Number.isFinite(seconds) || seconds <= 0 || seconds > 10) return false;
+    const paused = this.paused,
+      acceleration = this.acceleration;
+    this.paused = false;
+    this.acceleration = 1;
+    try {
+      const ticks = Math.max(1, Math.round(seconds * 30));
+      for (let i = 0; i < ticks; i++) this.update(seconds / ticks);
+    } finally {
+      this.paused = paused;
+      this.acceleration =
+        this.inCombat() && acceleration > 1
+          ? this.dev('combatTime')
+            ? Math.min(20, acceleration)
+            : 1
+          : acceleration;
+    }
+    return true;
   }
   debug(action) {
     if (action === 'funds') {
@@ -1112,9 +1244,13 @@ export class Simulation {
         (0.5 + 0.5 * Math.sin(this.p.time / 320 + this.p.x / 180000)) * this.config.ocean.stormStrength;
     else this.weather = 0;
     this.water.update(this, realDt);
-    if (this.acceleration > 1 && this.inCombat()) {
-      this.acceleration = 1;
-      this.message('Contact nearby. Time acceleration returned to 1×.');
+    if (this.acceleration > 1 && this.inCombat() && (!this.dev('combatTime') || this.acceleration > 20)) {
+      this.acceleration = this.dev('combatTime') ? 20 : 1;
+      this.message(
+        this.dev('combatTime')
+          ? 'Developer combat compression capped at 20×.'
+          : 'Contact nearby. Time acceleration returned to 1×.',
+      );
     }
     const dt = realDt * this.acceleration;
     if (this.acceleration > 20) {
@@ -1160,8 +1296,14 @@ export class Simulation {
     p.time += dt;
     this.cooldown = Math.max(0, this.cooldown - dt);
     this.gunCooldown = Math.max(0, this.gunCooldown - dt);
+    const maneuver = this.dev('maneuverMultiplier');
+    if (this.dev('infiniteResources')) p.fuel = p.battery = p.oxygen = 100;
     const previousDepth = p.depth;
-    p.depth += clamp(p.targetDepth - p.depth, -c.navigation.diveRate * dt, c.navigation.diveRate * dt);
+    p.depth += clamp(
+      p.targetDepth - p.depth,
+      -c.navigation.diveRate * maneuver * dt,
+      c.navigation.diveRate * maneuver * dt,
+    );
     const powered = p.depth > 3 ? p.battery > 0 && p.oxygen > 0 : p.fuel > 0;
     if (p.depth > 3 && (p.battery <= 0 || p.oxygen <= 0)) {
       p.targetDepth = 0;
@@ -1169,8 +1311,8 @@ export class Simulation {
     }
     p.speed += clamp(
       (powered ? this.speedLimit() * p.throttle : 0) - p.speed,
-      -c.navigation.acceleration * dt,
-      c.navigation.acceleration * dt,
+      -c.navigation.acceleration * maneuver * dt,
+      c.navigation.acceleration * maneuver * dt,
     );
     if (p.auto && p.route.length) {
       const next = p.route[0],
@@ -1186,17 +1328,17 @@ export class Simulation {
       } else
         p.heading += clamp(
           angleDelta(bearing(p, next), p.heading),
-          ((-c.navigation.turnRate * Math.PI) / 180) * dt,
-          ((c.navigation.turnRate * Math.PI) / 180) * dt,
+          ((-c.navigation.turnRate * maneuver * Math.PI) / 180) * dt,
+          ((c.navigation.turnRate * maneuver * Math.PI) / 180) * dt,
         );
-    } else p.heading += ((this.rudder * c.navigation.turnRate * Math.PI) / 180) * dt;
+    } else p.heading += ((this.rudder * c.navigation.turnRate * maneuver * Math.PI) / 180) * dt;
     p.heading = Math.atan2(Math.sin(p.heading), Math.cos(p.heading));
     if (strategic) {
       const next = {
         x: wrapX(p.x + Math.sin(p.heading) * p.speed * dt),
         z: p.z - Math.cos(p.heading) * p.speed * dt,
       };
-      if (!isLand(next.x, next.z)) {
+      if (this.dev('noClip') || !isLand(next.x, next.z)) {
         this.oceanX += deltaX(next.x, p.x);
         p.x = next.x;
         p.z = next.z;
@@ -1227,6 +1369,7 @@ export class Simulation {
       );
       p.oxygen = clamp(p.oxygen - hours * c.navigation.oxygenUse, 0, 100);
     }
+    if (this.dev('infiniteResources')) p.fuel = p.battery = p.oxygen = 100;
     this.warnResources();
     if (!this.detected && p.hp > 0)
       p.hp = Math.min(
@@ -1235,9 +1378,10 @@ export class Simulation {
           ((c.combat.repairRate * dt) / 60) * (1 + (p.skills.engineer || 0) * 0.6 + (p.crewRank - 1) * 0.05),
       );
     this.awardCrewXp(dt / 120);
-    coordinateFleet(this, dt);
+    if (!this.dev('freezeEnemies')) coordinateFleet(this, dt);
     let detected = false;
     for (const s of this.ships) {
+      if (this.dev('freezeEnemies')) continue;
       if (s.hp <= 0) {
         s.sinkTime += dt;
         continue;
@@ -1373,8 +1517,8 @@ export class Simulation {
       });
       if (touching) {
         const relative = Math.hypot(
-          Math.sin(p.heading) * p.speed - Math.sin(ship.heading) * ship.speed,
-          -Math.cos(p.heading) * p.speed + Math.cos(ship.heading) * ship.speed,
+          Math.sin(p.heading) * p.speed - Math.sin(ship.heading) * this.effectiveShipSpeed(ship),
+          -Math.cos(p.heading) * p.speed + Math.cos(ship.heading) * this.effectiveShipSpeed(ship),
         );
         this.hurt(clamp(relative * this.config.combat.collisionDamage, 0, 35), 'collision');
         this.collisionCooldown.set(ship.id, p.time + 2);
@@ -1384,7 +1528,7 @@ export class Simulation {
     const updated = this.body.translation();
     const nextX = wrapX(this.origin.x + updated.x),
       nextZ = this.origin.z + updated.z;
-    if (isLand(nextX, nextZ)) {
+    if (!this.dev('noClip') && isLand(nextX, nextZ)) {
       this.body.setTranslation({ x: deltaX(p.x, this.origin.x), y: updated.y, z: p.z - this.origin.z }, true);
       p.speed = 0;
       p.throttle = 0;
