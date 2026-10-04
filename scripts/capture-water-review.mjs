@@ -93,7 +93,10 @@ const report = {
   motion: [],
 };
 async function setup(page, fixture, build) {
-  const look = build === 'after' ? structuredClone(WATER_LOOKS[fixture.sea].tuning) : {};
+  const look =
+    build === 'after' || process.env.WATER_REVIEW_MATCH_LOOKS === '1'
+      ? structuredClone(WATER_LOOKS[fixture.sea].tuning)
+      : {};
   for (const [group, fields] of Object.entries(overrideTuning)) Object.assign((look[group] ||= {}), fields);
   await page.evaluate(
     ({ fixture, look }) => {

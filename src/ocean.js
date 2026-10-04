@@ -192,10 +192,17 @@ export class Ocean {
     const target = new THREE.Object3D();
     target.rotation.x = -Math.PI / 2;
     scene.add(target);
-    this.mirror = reflector({ target, resolutionScale: config.graphics.reflectionScale, bounces: false });
+    this.mirror = reflector({
+      target,
+      resolutionScale: config.graphics.reflectionScale,
+      generateMipmaps: true,
+      bounces: false,
+    });
     this.mirror.reflector.forceUpdate = true;
     this.baseReflectionUV = this.mirror.uvNode;
     this.reflectionEnabled = uniform(config.graphics.reflections ? 1 : 0);
+    this.reflectionPixels = uniform(1);
+    this.reflectionViewport = 1;
     this.refractionTarget = new THREE.RenderTarget(1, 1, { type: THREE.HalfFloatType, depthBuffer: true });
     this.refractionTarget.depthTexture = new THREE.DepthTexture(1, 1, THREE.UnsignedIntType);
     this.refraction = texture(this.refractionTarget.texture);
@@ -410,9 +417,12 @@ export class Ocean {
           .mul(this.look.reflectionDistortion)
           .mul(float(1).div(distance.mul(0.015).add(1)));
       this.mirror.uvNode = this.baseReflectionUV.add(distortion);
+      // A microfacet reflection covers a wider part of the scene as roughness
+      // grows. Filter that footprint instead of retaining a sharp mirror image.
+      const reflectionLod = log2(max(1, roughness.pow(2).mul(this.reflectionPixels).mul(0.5)));
       const reflectedColor = mix(
         environment.mul(this.look.environmentGain),
-        this.mirror.rgb,
+        this.mirror.level(reflectionLod).rgb,
         this.reflectionEnabled.mul(this.look.planarGain).mul(float(1).sub(roughness.mul(1.8))),
       );
       const illumination = this.skyLight.mul(0.83).add(0.055),
@@ -660,6 +670,7 @@ export class Ocean {
   }
 
   resize(width, height) {
+    this.reflectionViewport = Math.max(width, height);
     const scale = this.config.waterAppearance.refractionScale;
     this.refractionTarget.setSize(
       Math.max(1, Math.round(width * scale)),
@@ -819,6 +830,7 @@ export class Ocean {
     this.clarity.value = c.ocean.clarity;
     this.underwater.value = this.cameraImmersion ?? (this.cameraUnderwater ? 1 : 0);
     this.mirror.reflector.resolutionScale = c.graphics.reflectionScale;
+    this.reflectionPixels.value = Math.max(1, this.reflectionViewport * c.graphics.reflectionScale);
     this.reflectionEnabled.value = c.graphics.reflections ? 1 - this.underwater.value : 0;
     const oceanX = sim.oceanX ?? p.x,
       amplitudes = surface.amplitudes(weather);
