@@ -85,7 +85,7 @@ const app = {
   },
   loadCareer(value) {
     this.replace(restoreCareer(value.career), validateConfig(value.config), value.encounter);
-    this.sim.paused = this.ui.panel && this.ui.panel !== 'settings';
+    this.sim.paused = !!this.ui.panel && !['settings', 'developer'].includes(this.ui.panel);
   },
 };
 window.greywake = { state: () => app.sim?.state(), config: () => app.sim?.config, app };
@@ -264,6 +264,12 @@ function bindInputs() {
         e.preventDefault();
         document.getElementById('ai-play').click();
       }
+      return;
+    }
+    if (e.key === 'F2' && !e.repeat) {
+      e.preventDefault();
+      if (app.ui.panel === 'developer') app.ui.close();
+      else app.ui.open('developer');
       return;
     }
     if (e.key === 'Escape') {

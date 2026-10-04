@@ -1,0 +1,71 @@
+{
+  "objective": "Self-service developer mode with extensive live game-variable editing and practical playtesting tools.",
+  "requirements": [
+    {
+      "id": "discovery",
+      "requirement": "Dedicated panel accessible without coding",
+      "evidence": "F2 before/during patrol, Settings entry, active DEV MODE badge; actual browser controls checked",
+      "status": "verified"
+    },
+    {
+      "id": "variables",
+      "requirement": "Lots of live game variables to inspect and adjust",
+      "evidence": "All 105 existing graphics/ocean/navigation/combat/world/AI/economy variables, search/group filters, range and precise numeric inputs, defaults, profiles; browser count and actual damage tuning checked",
+      "status": "verified"
+    },
+    {
+      "id": "movement",
+      "requirement": "Move faster during playtesting",
+      "evidence": "Speed and maneuver multipliers, fast-travel preset, bounded combat compression, pause and real physics stepping; movement/time unit tests and browser actions",
+      "status": "verified"
+    },
+    {
+      "id": "teleport",
+      "requirement": "Teleport for convenient playtesting",
+      "evidence": "Finite/bounded coordinates, heading/depth, harbors with offshore correction, chart point, open Atlantic, near selected contact; physics origin, old weapons/wakes/visual reset and target preservation checked",
+      "status": "verified"
+    },
+    {
+      "id": "invulnerability",
+      "requirement": "Invulnerability and other practical playtest aids",
+      "evidence": "All damage kinds blocked, no collision/grounding, unlimited resources/ammo, no reload, frozen AI/ships, traffic suppression, encounter spawn/clear/sink, funds, restore/rearm; actual simulation tests",
+      "status": "verified"
+    },
+    {
+      "id": "persistence",
+      "requirement": "Reusable test setup and returning to normal play",
+      "evidence": "Developer settings saved separately in encounter metadata, profiles, session checkpoints including pause state, old saves supported, normal-mode overrides removed; save/reload and profile/checkpoint browser checks",
+      "status": "verified"
+    },
+    {
+      "id": "isolation",
+      "requirement": "Existing modes and normal game continue working",
+      "evidence": "Normal defaults preserved; 22 gameplay, 12 orientation and 10 AI-lab browser regressions pass. Dedicated developer-mode browser flow confirms AI lab/practice aids off and exact patrol developer-state restoration.",
+      "status": "verified"
+    }
+  ],
+  "verification": {
+    "unit": "artifacts/developer-unit-tests.log",
+    "developerBrowser": "artifacts/developer/report.json",
+    "gameplay": "artifacts/browser-report.json",
+    "orientation": "artifacts/orientation-audit/verification.json",
+    "aiLab": "artifacts/ai-lab/browser-report.json"
+  },
+  "status": "implementation verified",
+  "checks": {
+    "unitTests": 65,
+    "developerBrowser": 8,
+    "gameplayBrowser": 22,
+    "orientationBrowser": 12,
+    "aiLabBrowser": 10,
+    "lint": "passed",
+    "build": "passed",
+    "mobile": "portrait and landscape checked",
+    "browserErrors": []
+  },
+  "delivery": {
+    "repository": "https://github.com/michaelcrosato/greywake",
+    "target": "main",
+    "record": "GitHub PR and main commit are authoritative"
+  }
+}

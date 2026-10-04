@@ -17,6 +17,22 @@ npm run dev
 
 Vite prints the local URL. Serve over localhost or HTTPS for WebGPU availability. The game is also playable with touch controls in portrait or landscape.
 
+## Developer mode
+
+Open **Settings → Developer mode**, or press **F2** on the launch screen or during a patrol. Turn on Developer mode for playtest aids; an active-mode badge appears in the game. **Normal play** disables the aids and restores normal speed limits. Your live balance/graphics tuning remains as edited until you reset it.
+
+The panel exposes all 105 game variables with search, group filters, sliders, precise numeric entry, defaults and profile import/export. It covers graphics, ocean, navigation, combat, traffic, AI and economy. **Fast travel**, **Combat testing** and **Water inspection** presets configure developer aids separately from those game variables.
+
+Aids include invulnerability, speed and maneuver multipliers, unlimited fuel/battery/oxygen and ammo, instant reloads, no collisions/grounding, frozen ships/AI, paused traffic spawning and combat time compression. Combat compression caps at 20× and uses real physics; higher rates remain for clear-water travel. Paused frame/one-second/ten-second steps advance actual simulation and physics, so weapon, movement and AI tests do not require waiting in real time.
+
+Teleport to coordinates with depth/heading, jump to open Atlantic water or a named harbor, move near a selected contact, or use **Teleport to selected point** on the chart. Jumps stop the engines, clear navigation/weapons/wakes and synchronize physics and rendering. Moving near a contact preserves the ships. Harbor jumps find nearby navigable water when a map marker sits inside the simplified coastline, and report the offset. Manual land destinations require the no-collision/grounding aid.
+
+Encounter tools spawn merchants, escorts and convoys, clear contacts/weapons, sink a selected target, restore/rearm and grant bounty/XP. Tools alter the active career and its rewards. **Save checkpoint / Restore checkpoint** preserves a test's career, encounter, tuning, aids and pause state during the current session. Export a career for a checkpoint that survives closing the page. Playtest profiles save tuning and aids; saved careers retain developer settings across reloads. Guided practice and the AI lab keep their own simulations and start with developer aids off.
+
+```sh
+npm run test:developer
+```
+
 ## Startup diagnostics
 
 A small boot screen runs before the game. It reports version, deterministic build ID, platform, renderer/adapter and startup stage. Required checks finish before game code, styles or UI activate. The main loop starts only after physics, the renderer, shader compilation and a validated first frame succeed. WebGPU can fall back to WebGL 2; missing audio or local storage is reported without blocking play.

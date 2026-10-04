@@ -681,7 +681,7 @@ export class Ocean {
           depth: p.depth,
           y: sim.body.translation().y + 2,
         },
-        ...nearby,
+        ...nearby.map((ship) => ({ ...ship, speed: sim.effectiveShipSpeed(ship) })),
       ];
     this.wakes.forEach((wake, i) => {
       const s = sources[i];
