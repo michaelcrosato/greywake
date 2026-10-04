@@ -1,0 +1,598 @@
+{
+  "build": "48962e944c89",
+  "sha256": "2ea32b2e253effcc0f33962efe2a68311c5dec580dac62b664f34580aa6572fa",
+  "validatedAt": "2026-10-04T08:29:28.268Z",
+  "unitTests": 83,
+  "checks": [
+    {
+      "name": "water-lab",
+      "passed": true,
+      "groups": 30
+    },
+    {
+      "name": "water-browser",
+      "passed": true,
+      "groups": 5
+    },
+    {
+      "name": "developer",
+      "passed": true,
+      "groups": 9
+    },
+    {
+      "name": "browser",
+      "passed": true,
+      "groups": 22
+    },
+    {
+      "name": "boot",
+      "passed": true,
+      "groups": 20
+    },
+    {
+      "name": "boot:dev",
+      "passed": true
+    },
+    {
+      "name": "orientation",
+      "passed": true,
+      "groups": 12
+    },
+    {
+      "name": "ai-lab",
+      "passed": true,
+      "groups": 10
+    }
+  ],
+  "numerical": {
+    "passed": true,
+    "stress": [
+      {
+        "resolution": 32,
+        "seed": 42,
+        "minimumJacobian": 0.6948612414265553,
+        "maximumResidual": 0.000499854061733437,
+        "maximumHeight": 73.78354364635898,
+        "effectiveChop": 0.028996802276852512
+      },
+      {
+        "resolution": 32,
+        "seed": 1942,
+        "minimumJacobian": 0.7714411537075643,
+        "maximumResidual": 0.0004994119902121683,
+        "maximumHeight": 62.42068896164622,
+        "effectiveChop": 0.025962079440550765
+      },
+      {
+        "resolution": 64,
+        "seed": 42,
+        "minimumJacobian": 0.7137498076188167,
+        "maximumResidual": 0.000498999057238909,
+        "maximumHeight": 73.94912122539499,
+        "effectiveChop": 0.02445767351062176
+      },
+      {
+        "resolution": 64,
+        "seed": 1942,
+        "minimumJacobian": 0.7985736637529931,
+        "maximumResidual": 0.0004996167524337226,
+        "maximumHeight": 62.95920090092272,
+        "effectiveChop": 0.022407211827687817
+      },
+      {
+        "resolution": 128,
+        "seed": 42,
+        "minimumJacobian": 0.7196448114785577,
+        "maximumResidual": 0.000499994150574576,
+        "maximumHeight": 73.82589369524901,
+        "effectiveChop": 0.02058528026091934
+      },
+      {
+        "resolution": 128,
+        "seed": 1942,
+        "minimumJacobian": 0.7456473597469462,
+        "maximumResidual": 0.0004992925316576741,
+        "maximumHeight": 63.044809101022054,
+        "effectiveChop": 0.019274755027935676
+      }
+    ],
+    "boundaries": [
+      {
+        "resolution": 128,
+        "spacing": 3,
+        "edgeWidthMeters": 24,
+        "elapsed": 14,
+        "initialEnergy": 8.84442026048788,
+        "finalEnergy": 0.2803939406350645,
+        "energyRatio": 0.031702919171278425,
+        "lateToEarlyProbeRatio": 0.008368689376778614,
+        "note": "Probe ratio includes dispersive pulse tails; it is not an isolated physical reflection coefficient."
+      },
+      {
+        "resolution": 256,
+        "spacing": 1.5,
+        "edgeWidthMeters": 24,
+        "elapsed": 14,
+        "initialEnergy": 8.868180763151543,
+        "finalEnergy": 0.30560891543367513,
+        "energyRatio": 0.03446128620917611,
+        "lateToEarlyProbeRatio": 0.013908204346596918,
+        "note": "Probe ratio includes dispersive pulse tails; it is not an isolated physical reflection coefficient."
+      },
+      {
+        "resolution": 512,
+        "spacing": 0.75,
+        "edgeWidthMeters": 24,
+        "elapsed": 14,
+        "initialEnergy": 8.863808257805287,
+        "finalEnergy": 0.31290202038019466,
+        "energyRatio": 0.03530108180134194,
+        "lateToEarlyProbeRatio": 0.01678010386185783,
+        "note": "Probe ratio includes dispersive pulse tails; it is not an isolated physical reflection coefficient."
+      }
+    ],
+    "resize": [
+      {
+        "resolution": 256,
+        "heightError": 0,
+        "foamError": 0
+      },
+      {
+        "resolution": 512,
+        "heightError": 0,
+        "foamError": 0
+      },
+      {
+        "resolution": 128,
+        "heightError": 0,
+        "foamError": 0
+      }
+    ]
+  },
+  "visual": {
+    "passed": true,
+    "builds": {
+      "before": "81378f0be64993b537abec9074a64a03164adad38aab78e03ec9e5941b0c4f91",
+      "after": "2ea32b2e253effcc0f33962efe2a68311c5dec580dac62b664f34580aa6572fa"
+    },
+    "scenes": 56,
+    "motion": [
+      {
+        "backend": "webgl",
+        "scene": "low-sun-swell",
+        "frames": 24,
+        "switches": 0
+      },
+      {
+        "backend": "webgl",
+        "scene": "turn-and-aging-wake",
+        "frames": 24,
+        "switches": 0
+      },
+      {
+        "backend": "webgl",
+        "scene": "surface-camera-crossing",
+        "frames": 24,
+        "switches": 1
+      },
+      {
+        "backend": "webgpu",
+        "scene": "low-sun-swell",
+        "frames": 24,
+        "switches": 0
+      },
+      {
+        "backend": "webgpu",
+        "scene": "turn-and-aging-wake",
+        "frames": 24,
+        "switches": 0
+      },
+      {
+        "backend": "webgpu",
+        "scene": "surface-camera-crossing",
+        "frames": 24,
+        "switches": 1
+      }
+    ],
+    "turnBackendRmse": {
+      "max": 0.00611279,
+      "mean": 0.005497470416666666
+    }
+  },
+  "performance": {
+    "adapter": "SwiftShader software adapter; compare relative costs, not hardware FPS",
+    "method": "12 warmup callbacks, then 24 animation callbacks that rendered. Percentiles describe this short software-adapter sample. CPU timings are inclusive and overlap; submission/upload preparation is not measured GPU time.",
+    "cases": [
+      {
+        "name": "original",
+        "backend": "WebGPU",
+        "samples": 24,
+        "summary": {
+          "wallMs": {
+            "p50": 1065.2000000029802,
+            "p95": 1092.3999999910593
+          },
+          "callbackCpuMs": {
+            "p50": 29.200000002980232,
+            "p95": 33.69999998807907
+          },
+          "renderSubmissionMs": {
+            "p50": 9.900000005960464,
+            "p95": 12
+          },
+          "simulationMs": {
+            "p50": 19,
+            "p95": 22
+          },
+          "waterPreparationMs": {
+            "p50": 7.500000014901161,
+            "p95": 9.700000002980232
+          },
+          "surfaceQueryMs": {
+            "p50": 4.899999991059303,
+            "p95": 6.799999997019768
+          },
+          "interactionMs": {
+            "p50": 4.299999997019768,
+            "p95": 5.600000008940697
+          },
+          "uploadPreparationMs": {
+            "p50": 3.7000000029802322,
+            "p95": 5.799999997019768
+          }
+        },
+        "allocations": {
+          "textures": {
+            "min": 27,
+            "max": 27
+          },
+          "geometries": {
+            "min": 51,
+            "max": 51
+          },
+          "attributes": {
+            "min": 152,
+            "max": 152
+          },
+          "builders": {
+            "min": 0,
+            "max": 0
+          },
+          "pipelines": {
+            "min": 0,
+            "max": 0
+          },
+          "nodeStates": {
+            "min": 63,
+            "max": 63
+          }
+        }
+      },
+      {
+        "name": "no-reflections",
+        "backend": "WebGPU",
+        "samples": 24,
+        "summary": {
+          "wallMs": {
+            "p50": 1049.5,
+            "p95": 1084
+          },
+          "callbackCpuMs": {
+            "p50": 24.700000002980232,
+            "p95": 29.19999998807907
+          },
+          "renderSubmissionMs": {
+            "p50": 7.700000002980232,
+            "p95": 9.099999994039536
+          },
+          "simulationMs": {
+            "p50": 15.900000005960464,
+            "p95": 21.299999997019768
+          },
+          "waterPreparationMs": {
+            "p50": 6.999999970197678,
+            "p95": 9.30000002682209
+          },
+          "surfaceQueryMs": {
+            "p50": 4.700000017881393,
+            "p95": 6.700000017881393
+          },
+          "interactionMs": {
+            "p50": 3.8999999910593033,
+            "p95": 5.200000002980232
+          },
+          "uploadPreparationMs": {
+            "p50": 3.5999999940395355,
+            "p95": 3.9000000059604645
+          }
+        },
+        "allocations": {
+          "textures": {
+            "min": 27,
+            "max": 27
+          },
+          "geometries": {
+            "min": 51,
+            "max": 51
+          },
+          "attributes": {
+            "min": 152,
+            "max": 152
+          },
+          "builders": {
+            "min": 0,
+            "max": 0
+          },
+          "pipelines": {
+            "min": 0,
+            "max": 0
+          },
+          "nodeStates": {
+            "min": 63,
+            "max": 63
+          }
+        }
+      },
+      {
+        "name": "lab-open",
+        "backend": "WebGPU",
+        "samples": 24,
+        "summary": {
+          "wallMs": {
+            "p50": 3759.2000000029802,
+            "p95": 3821.7999999970198
+          },
+          "callbackCpuMs": {
+            "p50": 35.099999994039536,
+            "p95": 41.79999999701977
+          },
+          "renderSubmissionMs": {
+            "p50": 19.400000020861626,
+            "p95": 23
+          },
+          "simulationMs": {
+            "p50": 15.200000002980232,
+            "p95": 20.5
+          },
+          "waterPreparationMs": {
+            "p50": 6.5999999940395355,
+            "p95": 11.900000005960464
+          },
+          "surfaceQueryMs": {
+            "p50": 1.800000011920929,
+            "p95": 3.2000000178813934
+          },
+          "interactionMs": {
+            "p50": 5.4000000059604645,
+            "p95": 6.399999991059303
+          },
+          "uploadPreparationMs": {
+            "p50": 10.600000008940697,
+            "p95": 12.799999997019768
+          }
+        },
+        "allocations": {
+          "textures": {
+            "min": 27,
+            "max": 27
+          },
+          "geometries": {
+            "min": 51,
+            "max": 51
+          },
+          "attributes": {
+            "min": 152,
+            "max": 152
+          },
+          "builders": {
+            "min": 0,
+            "max": 0
+          },
+          "pipelines": {
+            "min": 0,
+            "max": 0
+          },
+          "nodeStates": {
+            "min": 60,
+            "max": 60
+          }
+        }
+      },
+      {
+        "name": "lab-boats",
+        "backend": "WebGPU",
+        "samples": 24,
+        "summary": {
+          "wallMs": {
+            "p50": 3764.5999999940395,
+            "p95": 3804.4000000059605
+          },
+          "callbackCpuMs": {
+            "p50": 40.79999999701977,
+            "p95": 48
+          },
+          "renderSubmissionMs": {
+            "p50": 23,
+            "p95": 28.799999997019768
+          },
+          "simulationMs": {
+            "p50": 17.5,
+            "p95": 24
+          },
+          "waterPreparationMs": {
+            "p50": 7.0999999940395355,
+            "p95": 12.200000047683716
+          },
+          "surfaceQueryMs": {
+            "p50": 4.099999964237213,
+            "p95": 6.0999999940395355
+          },
+          "interactionMs": {
+            "p50": 5.899999991059303,
+            "p95": 7.500000014901161
+          },
+          "uploadPreparationMs": {
+            "p50": 11.5,
+            "p95": 13.899999991059303
+          }
+        },
+        "allocations": {
+          "textures": {
+            "min": 27,
+            "max": 27
+          },
+          "geometries": {
+            "min": 51,
+            "max": 51
+          },
+          "attributes": {
+            "min": 152,
+            "max": 152
+          },
+          "builders": {
+            "min": 37,
+            "max": 37
+          },
+          "pipelines": {
+            "min": 3,
+            "max": 3
+          },
+          "nodeStates": {
+            "min": 97,
+            "max": 97
+          }
+        }
+      },
+      {
+        "name": "lab-underwater",
+        "backend": "WebGPU",
+        "samples": 24,
+        "summary": {
+          "wallMs": {
+            "p50": 3129.3999999910593,
+            "p95": 3248.7000000029802
+          },
+          "callbackCpuMs": {
+            "p50": 17.100000008940697,
+            "p95": 21.400000005960464
+          },
+          "renderSubmissionMs": {
+            "p50": 6.999999985098839,
+            "p95": 9.900000005960464
+          },
+          "simulationMs": {
+            "p50": 8.799999997019768,
+            "p95": 14.300000011920929
+          },
+          "waterPreparationMs": {
+            "p50": 5.799999997019768,
+            "p95": 11.099999994039536
+          },
+          "surfaceQueryMs": {
+            "p50": 0.4000000059604645,
+            "p95": 0.7000000029802322
+          },
+          "interactionMs": {
+            "p50": 0,
+            "p95": 0
+          },
+          "uploadPreparationMs": {
+            "p50": 1.9999999850988388,
+            "p95": 5.300000011920929
+          }
+        },
+        "allocations": {
+          "textures": {
+            "min": 27,
+            "max": 27
+          },
+          "geometries": {
+            "min": 51,
+            "max": 51
+          },
+          "attributes": {
+            "min": 152,
+            "max": 152
+          },
+          "builders": {
+            "min": 0,
+            "max": 0
+          },
+          "pipelines": {
+            "min": 0,
+            "max": 0
+          },
+          "nodeStates": {
+            "min": 60,
+            "max": 60
+          }
+        }
+      },
+      {
+        "name": "lab-tuning",
+        "backend": "WebGPU",
+        "samples": 24,
+        "summary": {
+          "wallMs": {
+            "p50": 3767.699999988079,
+            "p95": 3872.5999999940395
+          },
+          "callbackCpuMs": {
+            "p50": 34.900000005960464,
+            "p95": 39.80000001192093
+          },
+          "renderSubmissionMs": {
+            "p50": 19.80000001192093,
+            "p95": 21.599999994039536
+          },
+          "simulationMs": {
+            "p50": 15.299999997019768,
+            "p95": 20.700000002980232
+          },
+          "waterPreparationMs": {
+            "p50": 6.500000014901161,
+            "p95": 11.499999985098839
+          },
+          "surfaceQueryMs": {
+            "p50": 2.099999964237213,
+            "p95": 2.80000002682209
+          },
+          "interactionMs": {
+            "p50": 5.200000002980232,
+            "p95": 6.5
+          },
+          "uploadPreparationMs": {
+            "p50": 11.099999994039536,
+            "p95": 12.700000002980232
+          }
+        },
+        "allocations": {
+          "textures": {
+            "min": 27,
+            "max": 27
+          },
+          "geometries": {
+            "min": 51,
+            "max": 51
+          },
+          "attributes": {
+            "min": 152,
+            "max": 152
+          },
+          "builders": {
+            "min": 0,
+            "max": 0
+          },
+          "pipelines": {
+            "min": 0,
+            "max": 0
+          },
+          "nodeStates": {
+            "min": 60,
+            "max": 60
+          }
+        }
+      }
+    ]
+  }
+}

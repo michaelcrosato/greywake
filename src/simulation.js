@@ -10,6 +10,7 @@ import {
   restoreAI,
   updateEnemy,
 } from './enemy-ai.js';
+import { immersionEnvelope } from './water-math.js';
 import { hullWaterPose, newWaterMotion, OceanSurface } from './water-surface.js';
 import {
   angleDelta,
@@ -175,6 +176,8 @@ export class Simulation {
     this.visualTime = career.time;
     this.oceanX = career.x;
     this.water = new OceanSurface(config);
+    this.water.restore(null, this.visualTime);
+    this.localAccumulator = 0;
     this.waterMotion = newWaterMotion();
     this.origin = { x: career.x, z: career.z };
     this.physicsTicks = 0;
@@ -205,12 +208,38 @@ export class Simulation {
     return {
       x: sx * cy * cz + cx * sy * sz,
       y: cx * sy * cz - sx * cy * sz,
-      z: cx * cy * sz + sx * sy * cz,
-      w: cx * cy * cz - sx * sy * sz,
+      z: cx * cy * sz - sx * sy * cz,
+      w: cx * cy * cz + sx * sy * sz,
     };
   }
+  refreshWeather() {
+    this.weather = this.config.ocean.weather
+      ? (0.5 + 0.5 * Math.sin(this.p.time / 320 + this.p.x / 180000)) * this.config.ocean.stormStrength
+      : 0;
+    this.water.weather = this.weather;
+  }
   sampleWater(x, z) {
-    return this.water.sample(this.oceanX + deltaX(x, this.p.x), z, this.visualTime, this.weather);
+    return this.water.sample(
+      this.oceanX + deltaX(x, this.p.x),
+      z,
+      this.renderTime ?? this.visualTime,
+      this.renderWeather ?? this.weather,
+      true,
+      this.renderAlpha ?? 1,
+    );
+  }
+  sampleWaterSurface(x, z, options, out) {
+    return this.water.sampleSurface(
+      this.oceanX + deltaX(x, this.p.x),
+      z,
+      {
+        ...options,
+        time: this.renderTime ?? this.visualTime,
+        weather: this.renderWeather ?? this.weather,
+        alpha: this.renderAlpha ?? 1,
+      },
+      out,
+    );
   }
   recordAI(ship, type, details) {
     if (!this.aiRecording) return;
@@ -305,6 +334,8 @@ export class Simulation {
         body: { y: this.body.translation().y, vy: this.body.linvel().y },
         waterMotion: { ...this.waterMotion },
         water: this.water.interactions.snapshot(),
+        waterState: this.water.snapshot(),
+        localAccumulator: this.localAccumulator,
         waterImpacts: this.water.impacts.map((impact) => ({ ...impact })),
       },
     };
@@ -326,6 +357,8 @@ export class Simulation {
     this.weather = finite(raw.weather, 0, 0, 1);
     this.waterMotion = newWaterMotion(raw.waterMotion);
     this.water.interactions.restore(raw.water);
+    this.water.restore(raw.waterState, this.visualTime);
+    this.localAccumulator = finite(raw.localAccumulator, 0, 0, 2);
     this.water.impacts = (Array.isArray(raw.waterImpacts) ? raw.waterImpacts : [])
       .slice(-8)
       .filter(
@@ -497,7 +530,14 @@ export class Simulation {
     this.acceleration = finite(raw.acceleration, 1, 1, this.config.navigation.travelMultiplier);
     if (this.inCombat() && this.acceleration > 1)
       this.acceleration = this.dev('combatTime') ? Math.min(20, this.acceleration) : 1;
-    this.body.setTranslation({ x: 0, y: finite(raw.body?.y, -2 - this.p.depth, -600, 30), z: 0 }, true);
+    this.body.setTranslation(
+      {
+        x: 0,
+        y: finite(raw.body?.y, -2 - this.p.depth, -600, raw.waterState?.version === 1 ? 300 : 30),
+        z: 0,
+      },
+      true,
+    );
     this.body.setLinvel(
       {
         x: Math.sin(this.p.heading) * this.p.speed,
@@ -522,9 +562,10 @@ export class Simulation {
   head(department, trait) {
     return this.p.heads[department] === trait;
   }
-  speedLimit() {
-    const base =
-      this.p.depth > 3 ? this.config.navigation.submergedSpeed : this.config.navigation.surfaceSpeed;
+  speedLimit(depth = this.p.depth) {
+    if (this.labController)
+      return depth > 3 ? this.labController.submergedSpeed : this.labController.surfaceSpeed;
+    const base = depth > 3 ? this.config.navigation.submergedSpeed : this.config.navigation.surfaceSpeed;
     return (
       base *
       KNOT *
@@ -755,7 +796,7 @@ export class Simulation {
   }
 
   effectiveShipSpeed(ship) {
-    return this.dev('freezeEnemies') ? 0 : ship.speed;
+    return this.dev('freezeEnemies') && !this.labShipMotion ? 0 : ship.speed;
   }
   intercept(target, speed) {
     const rx = deltaX(target.x, this.p.x),
@@ -1105,7 +1146,13 @@ export class Simulation {
     this.cooldown = this.gunCooldown = 0;
     this.acceleration = 1;
     this.rudder = 0;
+    const previousPhase = this.water.phase,
+      previousClock = this.water.clockTime;
     this.water = new OceanSurface(this.config);
+    this.water.phase = previousPhase;
+    this.water.clockTime = previousClock;
+    this.water.ensure(this.visualTime);
+    this.previousPose = null;
     this.waterMotion = newWaterMotion();
     this.origin = { x: this.p.x, z: this.p.z };
     this.oceanX = this.p.x;
@@ -1192,14 +1239,17 @@ export class Simulation {
   developerStep(seconds) {
     if (!this.developer.enabled || !Number.isFinite(seconds) || seconds <= 0 || seconds > 10) return false;
     const paused = this.paused,
+      accumulator = this.localAccumulator,
       acceleration = this.acceleration;
     this.paused = false;
     this.acceleration = 1;
+    this.localAccumulator = 0;
     try {
       const ticks = Math.max(1, Math.round(seconds * 30));
       for (let i = 0; i < ticks; i++) this.update(seconds / ticks);
     } finally {
       this.paused = paused;
+      this.localAccumulator = accumulator;
       this.acceleration =
         this.inCombat() && acceleration > 1
           ? this.dev('combatTime')
@@ -1236,14 +1286,10 @@ export class Simulation {
   }
 
   update(realDt) {
+    const wallDt = realDt;
+    const frameStart = performance.now();
     if (this.paused || this.p.hp <= 0) return;
     realDt = Math.min(0.1, realDt);
-    this.visualTime += realDt;
-    if (this.config.ocean.weather)
-      this.weather =
-        (0.5 + 0.5 * Math.sin(this.p.time / 320 + this.p.x / 180000)) * this.config.ocean.stormStrength;
-    else this.weather = 0;
-    this.water.update(this, realDt);
     if (this.acceleration > 1 && this.inCombat() && (!this.dev('combatTime') || this.acceleration > 20)) {
       this.acceleration = this.dev('combatTime') ? 20 : 1;
       this.message(
@@ -1256,6 +1302,7 @@ export class Simulation {
     if (this.acceleration > 20) {
       // Strategic integration still checks route, resources, land and newly streamed encounters.
       let remaining = dt;
+      const before = this.p.time;
       while (remaining > 0) {
         const relativeSpeed =
           this.p.speed +
@@ -1268,6 +1315,27 @@ export class Simulation {
           break;
         }
       }
+      const accepted = this.p.time - before;
+      this.refreshWeather();
+      this.visualTime += accepted;
+      this.water.advanceTime(accepted);
+      this.water.interactions.recenter(this.oceanX, this.p.z);
+      this.water.interactions.height.fill(0);
+      this.water.interactions.velocity.fill(0);
+      this.water.contactHistory.clear();
+      for (const cascade of this.water.cascades)
+        for (let i = 0; i < cascade.foam.length; i++)
+          cascade.foam[i] *= Math.exp(-accepted / this.config.waterInteraction.whitecapDecay);
+      const decay = Math.exp(-accepted / this.config.ocean.foamLifetime);
+      for (let i = 0; i < this.water.interactions.foam.length; i++) this.water.interactions.foam[i] *= decay;
+      this.water.interactions.pack();
+      this.water.sprayEvents.length = 0;
+      this.water.impacts = this.water.impacts.filter((impact) => this.visualTime - impact.born < 15);
+      this.water.ensure(this.visualTime);
+      this.waterMotion = newWaterMotion({
+        wetness: this.waterMotion.wetness * Math.exp(-accepted / this.config.waterInteraction.dryTime),
+      });
+      this.localAccumulator = 0;
       this.rebase();
       this.body.setTranslation(
         { x: deltaX(this.p.x, this.origin.x), y: -2 - this.p.depth, z: this.p.z - this.origin.z },
@@ -1279,14 +1347,43 @@ export class Simulation {
       this.physics.step();
       this.physicsTicks++;
     } else {
-      const steps = Math.max(1, Math.ceil(dt / (1 / 30))),
-        subDt = dt / steps;
+      const step = 1 / 30;
+      this.localAccumulator = Math.min(2, this.localAccumulator + dt);
+      const steps = Math.min(16, Math.floor((this.localAccumulator + 1e-9) / step));
+      let acceptedSteps = 0;
       for (let i = 0; i < steps; i++) {
-        this.advance(subDt, false);
-        this.stepPhysics(subDt);
+        if (i > 0 && performance.now() - frameStart > 12) break;
+        const pose = (this.previousPose ||= {});
+        Object.assign(pose, {
+          x: this.p.x,
+          z: this.p.z,
+          y: this.body.translation().y,
+          heading: this.p.heading,
+          pitch: this.waterMotion.pitch,
+          roll: this.waterMotion.roll,
+          weather: this.weather,
+        });
+        for (const ship of this.ships)
+          Object.assign((ship.previousPose ||= {}), {
+            x: ship.x,
+            z: ship.z,
+            y: ship.y,
+            heading: ship.heading,
+            pitch: ship.motion.pitch,
+            roll: ship.motion.roll,
+          });
+        this.advance(step, false);
+        this.refreshWeather();
+        this.visualTime += step;
+        this.water.update(this, step);
+        this.stepPhysics(step);
+        for (const effect of this.effects) effect.age += step;
+        acceptedSteps++;
       }
+      this.localAccumulator = Math.max(0, this.localAccumulator - acceptedSteps * step);
+      this.achievedAcceleration = wallDt > 0 ? (acceptedSteps * step) / wallDt : 0;
     }
-    for (const effect of this.effects) effect.age += realDt;
+    if (this.acceleration > 20) for (const effect of this.effects) effect.age += dt;
     this.effects = this.effects.filter((e) => e.age < e.life);
   }
 
@@ -1297,13 +1394,12 @@ export class Simulation {
     this.cooldown = Math.max(0, this.cooldown - dt);
     this.gunCooldown = Math.max(0, this.gunCooldown - dt);
     const maneuver = this.dev('maneuverMultiplier');
+    const acceleration = this.labController?.acceleration ?? c.navigation.acceleration * maneuver;
+    const turnRate = this.labController?.turnRate ?? c.navigation.turnRate * maneuver;
+    const diveRate = this.labController?.diveRate ?? c.navigation.diveRate * maneuver;
     if (this.dev('infiniteResources')) p.fuel = p.battery = p.oxygen = 100;
     const previousDepth = p.depth;
-    p.depth += clamp(
-      p.targetDepth - p.depth,
-      -c.navigation.diveRate * maneuver * dt,
-      c.navigation.diveRate * maneuver * dt,
-    );
+    p.depth += clamp(p.targetDepth - p.depth, -diveRate * dt, diveRate * dt);
     const powered = p.depth > 3 ? p.battery > 0 && p.oxygen > 0 : p.fuel > 0;
     if (p.depth > 3 && (p.battery <= 0 || p.oxygen <= 0)) {
       p.targetDepth = 0;
@@ -1311,8 +1407,8 @@ export class Simulation {
     }
     p.speed += clamp(
       (powered ? this.speedLimit() * p.throttle : 0) - p.speed,
-      -c.navigation.acceleration * maneuver * dt,
-      c.navigation.acceleration * maneuver * dt,
+      -acceleration * dt,
+      acceleration * dt,
     );
     if (p.auto && p.route.length) {
       const next = p.route[0],
@@ -1328,10 +1424,10 @@ export class Simulation {
       } else
         p.heading += clamp(
           angleDelta(bearing(p, next), p.heading),
-          ((-c.navigation.turnRate * maneuver * Math.PI) / 180) * dt,
-          ((c.navigation.turnRate * maneuver * Math.PI) / 180) * dt,
+          ((-turnRate * Math.PI) / 180) * dt,
+          ((turnRate * Math.PI) / 180) * dt,
         );
-    } else p.heading += ((this.rudder * c.navigation.turnRate * maneuver * Math.PI) / 180) * dt;
+    } else p.heading += ((this.rudder * turnRate * Math.PI) / 180) * dt;
     p.heading = Math.atan2(Math.sin(p.heading), Math.cos(p.heading));
     if (strategic) {
       const next = {
@@ -1488,14 +1584,30 @@ export class Simulation {
     this.rebase();
     const t = this.body.translation(),
       v = this.body.linvel();
+    this.waterMotion.heave = t.y + 2 + p.depth;
+    this.waterMotion.heaveVelocity = v.y;
     const water = hullWaterPose(this, p, 66, 6, this.waterMotion, dt);
-    const targetY = -2 - p.depth + (p.depth < 5 ? water * (1 - p.depth / 5) : 0);
+    const fade = immersionEnvelope(p.depth, this.config.waterMotion.immersionDistance);
+    const targetY = -2 - p.depth + water * fade;
     const mass = this.body.mass(),
       spring = this.config.ocean.buoyancy,
       damping = this.config.ocean.buoyancyDamping;
     this.body.resetForces(true);
     this.body.addForce(
-      { x: 0, y: mass * clamp(9.81 + (targetY - t.y) * spring - v.y * damping, -50, 50), z: 0 },
+      {
+        x: 0,
+        y:
+          mass *
+          clamp(
+            9.81 +
+              (targetY - t.y) * spring -
+              (v.y - this.waterMotion.supportVelocity * this.config.waterMotion.velocityInfluence) * damping +
+              clamp(this.waterMotion.supportVelocity - v.y, 0, 3) * this.config.waterMotion.slamResponse,
+            -50,
+            50,
+          ),
+        z: 0,
+      },
       true,
     );
     this.body.setLinvel(
@@ -1508,6 +1620,12 @@ export class Simulation {
     this.physics.timestep = Math.max(0.0001, dt);
     this.physics.step();
     this.physicsTicks++;
+    const velocityAfter = this.body.linvel();
+    if (Math.abs(velocityAfter.y) > 12)
+      this.body.setLinvel(
+        { x: velocityAfter.x, y: clamp(velocityAfter.y, -12, 12), z: velocityAfter.z },
+        true,
+      );
     for (const ship of this.ships) {
       if (distance(ship, p) > ship.length * 0.5 + 40 || (this.collisionCooldown.get(ship.id) || 0) > p.time)
         continue;

@@ -6,6 +6,9 @@ import {
   openWaterNear,
   validateDeveloper,
 } from './developer-settings.js';
+import { settingControl, settingText, settingValue } from './setting-controls.js';
+import { applyWaterLook } from './water-presets.js';
+import { WATER_METADATA } from './water-settings.js';
 import { coordinates, DEG, KNOT, PORTS, wrapX } from './world.js';
 
 const $ = (id) => document.getElementById(id);
@@ -104,7 +107,9 @@ export class DeveloperPanel {
       <h3>Teleport</h3><div class="dev-coordinates"><label>Longitude · °<input id="dev-lon" type="number" min="-180" max="180" step="0.001" /></label><label>Latitude · °<input id="dev-lat" type="number" min="-78" max="78" step="0.001" /></label><label>Depth · m<input id="dev-depth" type="number" min="0" max="500" step="1" /></label><label>Heading · °<input id="dev-heading" type="number" min="0" max="360" step="1" /></label></div><div class="dev-actions"><button id="dev-read-position">Use current position</button><button id="dev-teleport">Teleport to coordinates</button><button id="dev-near-target">Near selected contact</button></div><label>Harbor <select id="dev-port">${PORTS.map((port, i) => `<option value="${i}">${port.name} · ${port.region}</option>`).join('')}</select></label><div class="dev-actions"><button id="dev-teleport-port">Teleport to harbor</button><button id="dev-atlantic">Open Atlantic</button><button id="dev-open-chart">Choose on chart</button></div>
       <h3>Sea and inspection</h3><div class="dev-actions">${Object.entries(SEA_STATES)
         .map(([key, state]) => `<button data-dev-sea="${key}">${state.name}</button>`)
-        .join('')}<button id="dev-ai-lab">Enemy AI lab</button></div>
+        .join(
+          '',
+        )}<button id="dev-water-lab">Open Water Lab</button><button id="dev-ai-lab">Enemy AI lab</button></div>
       </section><section><h3>Live game variables</h3><label>Search variables <input id="dev-search" type="search" placeholder="Speed, buoyancy, detection…" value="${escapeHtml(this.query)}" /></label><label>Group <select id="dev-group"><option value="all">All groups</option>${Object.keys(
         SETTINGS,
       )
@@ -195,10 +200,12 @@ export class DeveloperPanel {
     for (const button of document.querySelectorAll('[data-dev-sea]'))
       button.onclick = () =>
         this.action(() => {
-          const { name, ...settings } = SEA_STATES[button.dataset.devSea];
-          Object.assign(this.sim.config.ocean, settings);
-          return name;
+          applyWaterLook(this.sim.config, button.dataset.devSea);
+          this.sim.refreshWeather();
+          this.app.view.refreshEnvironment(true);
+          return SEA_STATES[button.dataset.devSea].name;
         });
+    $('dev-water-lab').onclick = () => this.app.waterLab.start();
     $('dev-ai-lab').onclick = () => this.app.aiLab.start();
     $('dev-search').oninput = (event) => {
       this.query = event.target.value;
@@ -255,36 +262,35 @@ export class DeveloperPanel {
     this.update();
   }
   control(key, spec, value, attribute) {
-    const boolean = typeof spec[1] === 'boolean';
-    const selector = spec[5]
-      ? `<select ${attribute}="${key}">${spec[5].map((v) => `<option ${v === value ? 'selected' : ''}>${v}</option>`).join('')}</select>`
-      : boolean
-        ? `<input ${attribute}="${key}" type="checkbox" ${value ? 'checked' : ''} />`
-        : `<input ${attribute}="${key}" type="range" min="${spec[2]}" max="${spec[3]}" step="${spec[4]}" value="${value}" /><input ${attribute}="${key}" type="number" aria-label="${escapeHtml(spec[0])} exact value" min="${spec[2]}" max="${spec[3]}" step="${spec[4] < 1 ? 'any' : spec[4]}" value="${value}" />`;
-    return `<div class="dev-setting"><label>${escapeHtml(spec[0])}<span class="dev-key">${key}</span>${selector}</label><output>${boolean ? (value ? 'ON' : 'OFF') : number(value)}</output></div>`;
+    return `<div class="dev-setting"><label>${escapeHtml(spec[0])}<span class="dev-key">${key}</span>${settingControl(key, spec, value, attribute, { numeric: true })}</label><output>${settingText(value)}</output></div>`;
   }
+
   bindControls(root, selector, apply) {
     for (const input of root.querySelectorAll(selector)) {
-      const handler = () => {
-        const key = input.getAttribute(selector.slice(1, -1)),
-          value = input.type === 'checkbox' ? input.checked : Number(input.value);
-        if (
-          input.type !== 'checkbox' &&
-          (!input.value.trim() || !Number.isFinite(value) || !input.checkValidity())
-        )
+      const handler = (event) => {
+        const key = input.getAttribute(selector.slice(1, -1));
+        const [group, field] = key.split('.');
+        const spec = field ? SETTINGS[group][field] : DEV_SETTINGS[key];
+        let value;
+        try {
+          value = settingValue(input, spec);
+        } catch {
           return;
-        apply(key, value);
+        }
+        apply(key, value, event);
         const row = input.closest('.dev-setting');
         for (const sibling of row.querySelectorAll(selector))
           if (sibling !== input) {
             if (sibling.type === 'checkbox') sibling.checked = value;
             else sibling.value = value;
           }
-        row.querySelector('output').textContent =
-          typeof value === 'boolean' ? (value ? 'ON' : 'OFF') : number(value);
+        row.querySelector('output').textContent = settingText(value);
       };
       if (input.type === 'number') input.onchange = handler;
-      else input.oninput = handler;
+      else {
+        input.oninput = handler;
+        input.onchange = handler;
+      }
     }
   }
   drawVariables() {
@@ -304,11 +310,17 @@ export class DeveloperPanel {
       })
       .join('');
     $('dev-variable-count').textContent = `${count} variables shown · values apply live`;
-    this.bindControls($('dev-variables'), '[data-dev-setting]', (path, value) => {
+    this.bindControls($('dev-variables'), '[data-dev-setting]', (path, value, event) => {
       const [group, key] = path.split('.');
+      const meta = WATER_METADATA[path];
+      if (meta && ['resource', 'spectrum'].includes(meta.update) && event?.type === 'input') return;
       this.sim.config[group][key] = value;
-      this.applyTuning(group, key);
-      this.save();
+      if (!meta || meta.update === 'resource') this.applyTuning(group, key);
+      if (meta?.section === 'Lighting' && event?.type === 'change') this.app.view.refreshEnvironment(true);
+      if (meta) {
+        clearTimeout(this.tuningSave);
+        this.tuningSave = setTimeout(() => this.save(), 250);
+      } else this.save();
     });
   }
   applyTuning(group, key) {
@@ -375,9 +387,10 @@ export class DeveloperPanel {
         const profile = JSON.parse(await file.text());
         if (profile.schema !== 'greywake.playtest/1' || !profile.config)
           throw new Error('Choose a Greywake playtest profile.');
-        const config = validateConfig(profile.config);
+        const config = validateConfig(profile.config, { strict: true });
+        const developer = validateDeveloper(profile.developer, { strict: true });
         for (const group of Object.keys(config)) Object.assign(this.sim.config[group], config[group]);
-        this.sim.setDeveloper(validateDeveloper(profile.developer));
+        this.sim.setDeveloper(developer);
         this.applyTuning();
         this.save();
         this.draw();

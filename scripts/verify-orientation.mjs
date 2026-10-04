@@ -125,6 +125,7 @@ try {
   assert.equal(await page.evaluate(() => greywake.app.sim.p.targetDepth), 12);
   assert.match(await page.locator('#depth-order').textContent(), /Diving.*12/);
   await page.click('#guide-wait');
+  await page.waitForFunction(() => !greywake.app.tutorial.advancing, null, { timeout: 120000 });
   await tick();
   assert.equal(await page.evaluate(() => greywake.app.sim.p.depth), 12);
   await page.keyboard.press('c');
@@ -145,11 +146,13 @@ try {
   await tick();
   assert.equal(await page.evaluate(() => greywake.app.sim.p.torpedoes), ammunition - 1);
   await page.click('#guide-wait');
+  await page.waitForFunction(() => !greywake.app.tutorial.advancing, null, { timeout: 120000 });
   await tick();
   if ((await page.evaluate(() => greywake.app.sim.p.sunk)) === 0) {
     await page.click('#torpedo');
     await tick();
     await page.click('#guide-wait');
+    await page.waitForFunction(() => !greywake.app.tutorial.advancing, null, { timeout: 120000 });
     await tick();
   }
   assert.equal(await page.evaluate(() => greywake.app.sim.p.sunk), 1);
@@ -165,12 +168,14 @@ try {
   await tick(4);
   await page.keyboard.up('a');
   await page.click('#guide-wait');
+  await page.waitForFunction(() => !greywake.app.tutorial.advancing, null, { timeout: 120000 });
   await tick();
   await capture();
   await next('surface');
   await page.keyboard.press('r');
   await tick();
   await page.click('#guide-wait');
+  await page.waitForFunction(() => !greywake.app.tutorial.advancing, null, { timeout: 120000 });
   await tick();
   await page.click('#gun');
   await tick(2);
@@ -203,6 +208,7 @@ try {
   await tick();
   assert.ok((await page.evaluate(() => greywake.app.sim.acceleration)) > 1);
   await page.click('#guide-wait');
+  await page.waitForFunction(() => !greywake.app.tutorial.advancing, null, { timeout: 120000 });
   await tick();
   await capture();
   await next('harbor');

@@ -21,7 +21,7 @@ Vite prints the local URL. Serve over localhost or HTTPS for WebGPU availability
 
 Open **Settings → Developer mode**, or press **F2** on the launch screen or during a patrol. Turn on Developer mode for playtest aids; an active-mode badge appears in the game. **Normal play** disables the aids and restores normal speed limits. Your live balance/graphics tuning remains as edited until you reset it.
 
-The panel exposes all 105 game variables with search, group filters, sliders, precise numeric entry, defaults and profile import/export. It covers graphics, ocean, navigation, combat, traffic, AI and economy. **Fast travel**, **Combat testing** and **Water inspection** presets configure developer aids separately from those game variables.
+The panel exposes all 213 game variables with search, group filters, sliders, precise numeric entry, defaults and profile import/export. It covers graphics, ocean, navigation, combat, traffic, AI and economy. **Fast travel**, **Combat testing** and **Water inspection** presets configure developer aids separately from those game variables.
 
 Aids include invulnerability, speed and maneuver multipliers, unlimited fuel/battery/oxygen and ammo, instant reloads, no collisions/grounding, frozen ships/AI, paused traffic spawning and combat time compression. Combat compression caps at 20× and uses real physics; higher rates remain for clear-water travel. Paused frame/one-second/ten-second steps advance actual simulation and physics, so weapon, movement and AI tests do not require waiting in real time.
 
@@ -115,11 +115,11 @@ Attacker/assistant roles, lost-contact searches, self-noise tradeoffs, and depth
 
 - Three.js **0.186.1**, WebGPU-first `WebGPURenderer`, and TSL materials shared with the WebGL 2 backend.
 - Rapier 3D **0.19.3** for dynamic submarine buoyancy, hull collisions, CCD torpedoes, and swept hit queries.
-- Six long-wave components plus three seeded wind-driven FFT cascades. Spectrum frames interpolate at 12 Hz, with 32/64/128 samples per cascade for Mobile/Balanced/Ultra. CPU surface queries invert the horizontal displacement so buoyancy and the rendered surface share a field.
-- Four nested ocean meshes concentrate detail within 384 m: 4 m vertex spacing on Mobile, 2.4 m on Balanced, and about 1.33 m on Ultra. Geometry filters waves below its sampling resolution; fragment normals retain fine ripples. Mesh skirts cover transitions between rings.
+- Six long-wave components plus three seeded wind-driven FFT cascades. Spectrum frames interpolate at a selectable 8/12/20 Hz, with 32/64/128 samples per cascade for Mobile/Balanced/Ultra. CPU surface queries invert the horizontal displacement so buoyancy and the rendered surface share a field.
+- Four nested ocean meshes concentrate detail within 384 m: 4 m vertex spacing on Mobile, 2.4 m on Balanced, and about 1.33 m on Ultra. Geometry filters waves below its sampling resolution; fragment normals retain fine ripples. Boundary vertices morph onto the next ring’s grid and share its displacement filtering; the rings use no skirts.
 - A moving 384 m water field propagates local disturbances and transports persistent foam. Hull contact, propeller wash, turning wakes, torpedoes, and sinking ships contribute to it. Scrolling preserves its world coordinates; compressed water memory and hull motion travel with career saves.
 - Fresnel reflection, filtered sun glitter, crest scattering, sky and boat reflections, textured whitecaps and wake foam, depth-aware refraction, underwater absorption, and an underwater surface window. Refraction can be disabled independently and starts disabled on Mobile.
-- Hull heave, pitch, and roll respond to several water samples with damping. Wave encounters drive bow spray and wetness; hull materials darken and become more reflective, then dry over time. Plumes and bubbles distinguish shells, torpedoes, and depth charges. Impact rings use the actual hit position and reach beyond the local water field.
+- Hull heave, pitch, and roll use twelve weighted support points, relative wave-velocity damping, and a common immersion envelope. Positive pitch raises the bow; yaw precedes local pitch/roll on both the collider and model. Wave encounters drive bow spray and wetness; hull materials darken and become more reflective, then dry over time. Plumes and bubbles distinguish shells, torpedoes, and depth charges. Impact rings use the actual hit position and reach beyond the local water field.
 - Procedural weathered U-boat and merchant/escort models; sky environment lighting, drifting clouds, a moving sun, smoke, tracers, fireballs, underwater haze, and synthesized sea/engine/combat audio.
 - Telescoping periscope optics, a closer submerged chase camera, and visible service-anchor buoys. The solar clock follows latitude and longitude, with sunrise in the east and sunset in the west. Sky reflection updates reuse the existing environment target at a configurable interval.
 - Deterministic shipping cells follow regional corridors. A floating physics origin preserves local precision during global travel. Fast voyages use strategic integration with coast, resource, arrival, and contact checks.
@@ -147,6 +147,30 @@ The orientation verifier walks every lesson through actual controls, validates c
 
 The browser suites run sequentially on this workstation’s software SwiftShader adapter; screenshot capture drains queued frames. Physical S25 and RTX 3060 Ti performance must be measured on those devices. The game exposes quality and simulation controls so those measurements can inform your chosen settings.
 
+## Water Lab
+
+Open **F2 → Sea and inspection → Open Water Lab**, or **Settings → Ocean → Open Water Lab**. A desktop dock leaves the sea visible; portrait and landscape touch layouts use a collapsible bottom sheet. The toolbar keeps playback, exact frame/one-second/ten-second steps, camera bookmarks, look presets, and A/B actions available while controls scroll.
+
+The lab parks your patrol and runs an isolated experiment. Autosave and career export continue to use the parked patrol. **Apply water tuning to patrol** copies an explicit water, lighting, and graphics allowlist; **Return to patrol** restores the original simulation, camera, pause, inputs, and launch/HUD state. The patrol fixture holds shipping and clears live ordnance while retaining boat poses and existing water memory. Seeded fixtures provide flat water, calm cruising, Atlantic swell, head/beam seas, a 90° turn, crossing wakes, diving/surfacing, a shallow camera crossing, and weapon impacts. Noon, low sun, and overcast lighting freeze the local solar view and cloud phase.
+
+Controls cover Waves, Surface, Foam & wakes, Underwater, Boat response, Lighting, Quality, and Inspect. Search, changed-only, Advanced, numeric entry, color pickers, and field/section resets share the configuration schema with F2 and Settings. The advanced swell editor starts from the six original components. Wave height remains a **mixture coefficient**, with zero allowed; it is not significant wave height. Directions describe travel **toward**: 0° north (−Z), 90° east (+X).
+
+Cheap changes preview while dragging. Spectrum and allocation changes commit on release; swell length/direction/enabling changes rerun the fixture. Sun/cloud commits explicitly refresh the existing environment target. The lab does not serialize a full career for each slider event. Calm, Atlantic, heavy-sea, clear-water, and overcast looks adjust colors, roughness, glitter, detail, and whitecaps; ordinary sea presets use the same art tuning.
+
+**Pause** freezes simulation and effects. **Freeze wave phase** holds the base waves while local wakes and boats may continue, with zero base-wave velocity reported. Long advances yield and can be paused or reset. **Store A/B** and **View A/B** compare appearance at one held camera, phase, seed, and boat pose. Use **Reset scene** with the same fixture and inputs to compare hull or wake behavior.
+
+Export/import uses `greywake.water-lab/1`: water tuning, quality, seed, lighting, scenario, initial boat/controller/ship conditions, optional quantized water memory, camera pose, duration, and scripted actions. Imports validate before changing the experiment; unsupported versions, invalid fields, and files over 4 MB are rejected. Recipes reconstruct an experiment; career/playtest formats remain compatible. Missing or corrupt optional career water memory defaults without discarding progression.
+
+Inspect provides geometric height, final normals, displaced-surface compression/Jacobian, foam sources/coverage/age, local extent, reflection/refraction/depth, immersion, mesh wireframe, and pooled hull support markers. Diagnostics distinguish requested/effective chop, phase/physics clocks, solver substeps/Courant number, CPU preparation/query/interaction time, target sizes, memory, shader counts, and the actual backend/adapter.
+
+The base phase integrates accepted time, so a speed edit changes its future rate without replacing the sea. Shared low-frequency mode identities survive quality changes. Wind/seed changes crossfade old and target CPU fields into the existing texture set. A conservative horizontal derivative bound limits effective chop; bounded inverse queries target 0.5 mm residual. Normals use displaced tangents, including off-diagonal derivatives. Crest compression is `1 − det(I + ∇D)`, positive at compressed crests.
+
+Local disturbances use a 384 m field, stable substeps, diffusion in world units, and a 24 m time-based absorbing edge. Persistent foam and simulation-owned world-space wake histories share age and drift. Near/far foam uses complementary fades over 134.4–184.32 m from the local field center. Contact velocity drives wetness and bounded spray; droplets return to the sampled surface. Current affects local foam and water inspection, while routes, aiming, and AI navigation retain their existing behavior.
+
+Local simulation runs at 1/30 s, with interpolated rendering and bounded work per callback. The requested compression can exceed the achieved rate under load; diagnostics report both. Strategic travel advances the accepted phase analytically, expires transient memory, and clears local wave impulses before resuming. The launch preview has its own clock and does not advance career water memory.
+
+This is a controlled height-field/probe model using the existing player mass of 750 engine units, not calibrated hydrostatics or a full ballast/fluid-volume simulation. Fluid velocities are model approximations. Planar reflection represents the mean surface. Fine ripples affect shading rather than hull physics. Extreme gain combinations can create exaggerated seas; the effective chop/steepness safeguards keep queries bounded. Desktop/mobile FPS targets need measurements on those devices; Xvfb/SwiftShader verification does not establish hardware performance.
+
 ## Water verification
 
 Settings → Ocean includes **Calm water**, **Atlantic swell**, and **Heavy seas** presets, plus wind speed/direction, foam lifetime, crest light, and underwater visibility. Graphics controls separately select spectrum and interaction resolution, reflections, and refraction.
@@ -155,8 +179,13 @@ Settings → Ocean includes **Calm water**, **Atlantic swell**, and **Heavy seas
 npm run test:water
 npm run test:water-browser
 npm run test:water-driver
+npm run test:water-lab
+node scripts/audit-water-fields.mjs
+xvfb-run -a node scripts/capture-water-review.mjs
 npm run capture:water-native
 ```
+
+The matched review script uses Chrome, Xvfb and `ffmpeg`, and writes a local gallery, raw frames, metadata and MP4 clips to `artifacts/water-review/`. It expects the preserved pre-upgrade HTML at `artifacts/water-planning/greywake-before.html`; in a fresh checkout, build commit `34bc3b7` separately and set `WATER_BEFORE` to that HTML. See [validation and measured limits](docs/water-validation.md) for the closure review.
 
 Water tests cover Fourier reconstruction, wind variation, temporal continuity, wave-driven hull motion, wake scrolling and decay, compact persistence, date-line continuity, depth attenuation, distant impacts, and bounded wake volume. The water browser verifier captures calm, swell, heavy seas, turning wakes, weapon impacts, and underwater travel on both actual rendering backends. It also checks live quality/refraction controls, texture disposal and actual GPU buffer allocations after repeated quality changes, and water save data. Its captures retain Balanced water, reflections, refraction, and shadows at a practical resolution for software adapters. Scene captures advance simulation and effects at 30 Hz before submitting the final frame; their FPS labels are not a performance benchmark. Buffer checks intercept actual WebGPU/WebGL allocation and deletion because Three.js also counts attribute views that share an existing GPU buffer. The shader verifier generates both GLSL and WGSL with the installed Three.js builders. The driver verifier compiles and links GLSL with Linux surfaceless EGL/GLES using Python's standard library.
 

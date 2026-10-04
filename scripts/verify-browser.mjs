@@ -464,7 +464,10 @@ try {
   });
   await ready(standalone, `${pathToFileURL(resolve('dist/greywake.html'))}?renderer=webgl`);
   await startPatrol(standalone);
-  await standalone.waitForTimeout(600);
+  await standalone.waitForFunction(() => greywake.state().physicsTicks > 0, null, {
+    timeout: 60000,
+    polling: 100,
+  });
   assert.deepEqual(requests, []);
   assert.equal(await standalone.evaluate(() => greywake.state().torpedoes), 14);
   assert.ok((await standalone.evaluate(() => greywake.state().physicsTicks)) > 0);

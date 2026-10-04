@@ -21,7 +21,8 @@
     "test:boot": "xvfb-run -a node scripts/verify-boot.mjs",
     "test:boot:browsers": "xvfb-run -a node scripts/verify-boot-browsers.mjs",
     "test:boot:dev": "xvfb-run -a node scripts/verify-boot-dev.mjs",
-    "test:developer": "xvfb-run -a node scripts/verify-developer.mjs"
+    "test:developer": "xvfb-run -a node scripts/verify-developer.mjs",
+    "test:water-lab": "xvfb-run -a node scripts/verify-water-lab.mjs"
   },
   "dependencies": {
     "@dimforge/rapier3d-compat": "0.19.3",

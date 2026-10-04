@@ -21,6 +21,7 @@ const pass = (name) => {
   console.log(`PASS ${name}`);
 };
 const page = await browser.newPage({ viewport: { width: 1440, height: 1000 } });
+page.setDefaultTimeout(120000);
 page.on('pageerror', (e) => report.errors.push(e.stack));
 page.on('console', (m) => {
   if (m.type() === 'error') report.errors.push(m.text());
@@ -202,6 +203,19 @@ try {
   pass('Apply tuning explicitly commits the chosen AI settings to the parked patrol');
   assert.deepEqual(await page.evaluate(() => window.__consoleErrors), []);
   assert.deepEqual(report.errors, []);
+} catch (error) {
+  report.failure = error.message;
+  report.runtime = await page
+    .evaluate(() => ({
+      boot: window.gameBoot?.snapshot(),
+      errors: window.__consoleErrors,
+      started: window.greywake?.app.started,
+      launchHidden: document.getElementById('launch')?.hidden,
+      beginDisabled: document.getElementById('begin')?.disabled,
+    }))
+    .catch(() => null);
+  await page.screenshot({ path: 'artifacts/ai-lab/failure.png', timeout: 120000 }).catch(() => {});
+  throw error;
 } finally {
   await writeFile('artifacts/ai-lab/browser-report.json', JSON.stringify(report, null, 2));
   await browser.close();

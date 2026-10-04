@@ -2726,3 +2726,245 @@ body.tutorial-modal #modal .modal {
 .modal.developer-modal {
   max-width: 1120px;
 }
+:root {
+  --water-dock-width: min(360px, 33.333vw);
+}
+#water-lab {
+  position: fixed;
+  right: 12px;
+  top: 12px;
+  bottom: 12px;
+  width: var(--water-dock-width);
+  z-index: 35;
+  display: flex;
+  flex-direction: column;
+  background: rgba(10, 25, 31, 0.96);
+  border: 1px solid rgba(142, 185, 176, 0.28);
+  border-radius: 12px;
+  box-shadow: 0 12px 40px #0005;
+  color: #d6e4df;
+  overflow: hidden;
+}
+#water-lab[hidden] {
+  display: none;
+}
+.water-lab-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px;
+}
+.water-lab-header h2 {
+  margin: 0;
+  font-size: 19px;
+}
+.water-lab-header h2 small {
+  font-size: 12px;
+  font-weight: normal;
+  color: #90aea6;
+}
+.water-lab-header .eyebrow {
+  font-size: 9px;
+  margin: 0 0 4px;
+}
+#water-lab button {
+  min-height: 34px;
+  font-size: 11px;
+  padding: 6px 9px;
+  background: #17332f;
+  border: 1px solid #6b928344;
+  border-radius: 6px;
+  color: #d6e4df;
+}
+.water-quickbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px 8px;
+}
+.water-quickbar label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 10px;
+}
+.water-quickbar select {
+  width: 135px;
+  font-size: 11px;
+}
+.water-compare {
+  padding: 0 12px;
+}
+#water-lab input,
+#water-lab select {
+  max-width: 100%;
+}
+.water-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  padding: 0 12px 10px;
+  border-bottom: 1px solid #89b8aa30;
+}
+#water-time {
+  align-self: center;
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+.water-lab-body {
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 12px;
+}
+.water-lab-body > label {
+  display: block;
+  margin: 10px 0;
+}
+.water-scene-controls {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+.water-scene-controls label {
+  font-size: 11px;
+}
+.water-scene-controls select {
+  display: block;
+  width: 100%;
+  margin-top: 3px;
+}
+.water-compare {
+  margin: 0;
+  padding: 0;
+}
+.water-compare button {
+  margin-right: 4px;
+}
+.water-compare p,
+#water-feedback {
+  font-size: 11px;
+  line-height: 1.5;
+}
+.water-filters {
+  display: flex;
+  gap: 16px;
+  font-size: 11px;
+}
+.water-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin: 12px 0;
+}
+.water-tabs .active {
+  background: #254c4a;
+  color: #d6efdf;
+  border-color: #72aa96;
+}
+.water-setting {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 76px;
+  gap: 6px;
+  padding: 10px 0;
+  border-bottom: 1px solid #89b8aa20;
+}
+.water-setting-heading {
+  display: flex;
+  grid-column: 1 / -1;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 12px;
+}
+.water-setting input[type="range"] {
+  width: 100%;
+  min-width: 0;
+}
+.water-setting input[type="number"] {
+  width: 76px;
+  min-width: 0;
+  font-size: 12px;
+}
+.water-setting output,
+.water-setting small {
+  grid-column: 1 / -1;
+  font-size: 10px;
+  color: #91b4aa;
+}
+.water-setting small span {
+  color: #d0b879;
+}
+.water-section-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 11px;
+}
+.water-presets,
+.water-files {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 14px;
+}
+#water-telemetry {
+  font-size: 10px;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+#water-lab.collapsed {
+  bottom: auto;
+}
+#water-lab.collapsed .water-lab-body {
+  display: none;
+}
+@media (max-width: 700px), (max-height: 450px) {
+  #water-lab {
+    top: auto;
+    left: 8px;
+    right: 8px;
+    bottom: 8px;
+    width: auto;
+    max-height: 48vh;
+  }
+  .water-lab-header {
+    padding: 8px 12px;
+  }
+  .water-lab-header .eyebrow {
+    display: none;
+  }
+  .water-toolbar {
+    padding-bottom: 6px;
+  }
+  #water-lab.collapsed {
+    top: auto;
+    bottom: 8px;
+  }
+}
+
+#water-lab input[type="search"],
+#water-lab input[type="number"],
+#water-lab select {
+  background: #132c2a;
+  border: 1px solid #6b928366;
+  border-radius: 5px;
+  color: #d6e4df;
+  padding: 5px;
+  font-size: 11px;
+}
+#water-search {
+  width: 100%;
+  margin-top: 5px;
+}
+
+.water-lab-active #toast {
+  display: none;
+}
+.water-helm label {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  margin: 8px 0;
+  font-size: 11px;
+}

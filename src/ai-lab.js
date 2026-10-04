@@ -38,6 +38,7 @@ export class AILab {
   }
   start() {
     if (this.active) return;
+    if (this.app.waterLab?.active) this.app.waterLab.stop();
     if (this.app.tutorial.active) this.app.tutorial.stop(false);
     this.app.ui.close();
     this.app.clearInputs();

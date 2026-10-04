@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { defaults } from '../src/config.js';
+import { defaults, PRESETS } from '../src/config.js';
 import { initPhysics, newCareer, restoreCareer, Simulation } from '../src/simulation.js';
 
 await initPhysics();
@@ -80,4 +80,28 @@ test('Malformed encounter rows are ignored, duplicate identifiers are rejected, 
   assert.equal(s.body.translation().y, -2);
   assert.deepEqual([...s.streamed], ['-4,5,0']);
   s.dispose();
+});
+
+test('Ultra water exports fit the import budget and corrupt optional water memory preserves the career', () => {
+  const config = defaults();
+  Object.assign(config.graphics, PRESETS.ultra);
+  const sim = new Simulation(config, newCareer(), { ambientTraffic: false });
+  sim.p.bounty = 1234;
+  sim.water.interactions.recenter(sim.oceanX, sim.p.z);
+  sim.water.interactions.disturb(sim.oceanX, sim.p.z, 6, 1, 1);
+  sim.water.interactions.pack();
+  const saved = sim.snapshot();
+  const exported = JSON.stringify(saved, null, 2);
+  assert.ok(exported.length > 2e6 && exported.length < 4e6);
+  const restored = new Simulation(config, restoreCareer(saved.career), { encounter: saved.encounter });
+  assert.ok(Math.abs(restored.water.interactions.sample(sim.oceanX, sim.p.z, true) - 1) < 0.007);
+  restored.dispose();
+  saved.encounter.water.data = 'corrupt';
+  saved.encounter.waterState.foam = ['bad', null, []];
+  saved.encounter.waterState.wakes = [null, {}, ['bad', [null]]];
+  const recovered = new Simulation(config, restoreCareer(saved.career), { encounter: saved.encounter });
+  assert.equal(recovered.p.bounty, 1234);
+  assert.ok(Number.isFinite(recovered.sampleWater(recovered.p.x, recovered.p.z)));
+  recovered.dispose();
+  sim.dispose();
 });

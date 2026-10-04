@@ -50,6 +50,7 @@ async function input(selector, value) {
 async function settle() {
   await page.evaluate(async () => {
     greywake.app.sim.paused = true;
+    greywake.app.view.renderer._nodes.nodeFrame.update();
     greywake.app.view.render(0.1, false, 0.1);
     const b = greywake.app.view.renderer.backend;
     if (b.device) await b.device.queue.onSubmittedWorkDone();
@@ -103,7 +104,7 @@ try {
   await page.click('#dev-atlantic');
   assert.equal(await page.evaluate(() => greywake.app.sim.p.x), -30 * 111000);
   assert.equal(await page.evaluate(() => greywake.app.sim.origin.x), -30 * 111000);
-  assert.equal(await page.evaluate(() => greywake.app.view.trails.size), 0);
+  assert.equal(await page.evaluate(() => greywake.app.sim.water.wakeHistory.size), 0);
   await page.click('#dev-checkpoint-load');
   assert.deepEqual(
     await page.evaluate(() => ({
@@ -221,6 +222,32 @@ try {
   await page.click('#dev-return-patrol');
   assert.equal(await page.evaluate(() => JSON.stringify(greywake.app.sim.developer)), careerDev);
   pass('Developer aids stay out of the AI lab and guided practice; returning preserves the patrol aids');
+  await page.evaluate(() => greywake.app.ui.open('settings'));
+  await page.click('[data-settings-tab="ocean"]');
+  const saves = await page.evaluate(async () => {
+    const app = greywake.app;
+    const save = app.save.bind(app);
+    let count = 0;
+    app.save = () => {
+      count++;
+      save();
+    };
+    try {
+      const control = document.querySelector('[data-setting="ocean.waveHeight"]');
+      for (let i = 0; i < 20; i++) {
+        control.value = String(1 + i / 10);
+        control.dispatchEvent(new Event('input', { bubbles: true }));
+      }
+      const duringDrag = count;
+      control.dispatchEvent(new Event('change', { bubbles: true }));
+      await new Promise((resolve) => setTimeout(resolve, 400));
+      return { duringDrag, afterCommit: count, value: app.sim.config.ocean.waveHeight };
+    } finally {
+      app.save = save;
+    }
+  });
+  assert.deepEqual(saves, { duringDrag: 0, afterCommit: 1, value: 2.9 });
+  pass('Ordinary water sliders preview live and coalesce career serialization until editing settles');
   assert.deepEqual(report.errors, []);
   assert.deepEqual(await page.evaluate(() => window.__consoleErrors), []);
   report.passed = true;
